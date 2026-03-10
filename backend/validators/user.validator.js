@@ -1,4 +1,4 @@
-const { z } = require("zod");
+const { z, email } = require("zod");
 
 const stageEnum = z.enum([
   "penginputan",
@@ -10,12 +10,18 @@ const stageEnum = z.enum([
 
 const createUserSchema = z.object({
   name: z.string().min(3).max(50),
-  email: z.email().transform((value) => value.toLowerCase()),
-  userName: z.string().min(4),
-  password: z.string().min(6),
+  email: z.email("Format email tidak valid").transform((v) => v.toLowerCase()),
+  userName: z.string().min(4, "Username minimal 4 karakter"),
+  password: z.string().min(6, "Password minimal 6 karakter"),
   role: z.enum(["admin", "operator", "viewer"]),
   stages: z.array(stageEnum).optional(),
   adminSecret: z.string().optional(),
 });
 
-module.exports = { createUserSchema };
+const signInSchema = z.object({
+  email: z.email("Format email tidak valid").transform((v) => v.toLowerCase()),
+  userName: z.string().min(4, "Username minimal 4 karakter"),
+  password: z.string().min(6, "Password minimal 6 karakter"),
+});
+
+module.exports = { createUserSchema, signInSchema };

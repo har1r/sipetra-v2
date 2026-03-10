@@ -8,7 +8,7 @@ class UserRepository {
   async findDuplicate(email, userName) {
     return User.findOne({
       $or: [{ email: email.toLowerCase() }, { userName: userName }],
-    }).select("email userName");
+    }).lean();
   }
 }
 

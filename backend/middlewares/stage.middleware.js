@@ -7,9 +7,8 @@ const checkStagePermission = (stage) => {
     }
 
     if (!stages || !stages.includes(stage)) {
-
       return res.status(403).json({
-        message: "Tidak memiliki akses ke stage ini"
+        message: "Tidak memiliki akses ke stage ini",
       });
     }
 

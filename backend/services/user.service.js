@@ -1,5 +1,5 @@
 const userRepository = require("../repositories/user.repository");
-const { hashPassword } = require("../utils/password.util");
+const { hashPassword, comparePassword } = require("../utils/password.util");
 const { generateToken } = require("../utils/jwt.util");
 
 const ALL_STAGES = [
@@ -7,7 +7,7 @@ const ALL_STAGES = [
   "penelitian",
   "pengarsipan",
   "pengiriman",
-  "pemeriksaan"
+  "pemeriksaan",
 ];
 
 const registerUser = async (userData) => {
@@ -15,14 +15,14 @@ const registerUser = async (userData) => {
 
   const existingUser = await userRepository.findDuplicate(
     safeData.email,
-    safeData.userName
+    safeData.userName,
   );
 
   if (existingUser) {
     throw new Error(
       existingUser.email === safeData.email
         ? "Email sudah ada"
-        : "Username sudah ada"
+        : "Username sudah ada",
     );
   }
 
@@ -34,7 +34,10 @@ const registerUser = async (userData) => {
     safeData.stages = ALL_STAGES;
   }
 
-  if (safeData.role === "operator" && (!safeData.stages || safeData.stages.length === 0)) {
+  if (
+    safeData.role === "operator" &&
+    (!safeData.stages || safeData.stages.length === 0)
+  ) {
     throw new Error("Operator wajib memiliki minimal satu stage.");
   }
 
@@ -48,11 +51,38 @@ const registerUser = async (userData) => {
   const payload = {
     id: user._id,
     role: user.role,
-    stages: user.stages
+    stages: user.stages,
   };
   const token = generateToken(payload);
 
   return { user, token };
 };
 
-module.exports = { registerUser };
+const signInUser = async (userData) => {
+  const { password, email, userName } = userData;
+
+  const existingUser = await userRepository.findDuplicate(email, userName);
+  console.log(existingUser);
+
+  const isPasswordValid =
+    existingUser && (await comparePassword(password, existingUser.password));
+  if (!isPasswordValid) {
+    throw new Error("Email atau Password salah");
+  }
+
+  const payload = {
+    id: existingUser._id,
+    role: existingUser.role,
+    stages: existingUser.stages,
+  };
+  const token = generateToken(payload);
+
+  const modifiedUser = {
+    ...existingUser,
+    lastLogin: new Date(),
+  };
+
+  return { modifiedUser, token };
+};
+
+module.exports = { registerUser, signInUser };

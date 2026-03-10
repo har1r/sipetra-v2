@@ -4,7 +4,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 
 const userRoutes = require("./routes/user.route");
-const errorHandler = require("./middlewares/error.middleware")
+const errorHandler = require("./middlewares/error.middleware");
 const app = express();
 
 // MIDDLEWARES GLOBAL
@@ -16,15 +16,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // ROUTES
 app.use("/api/users", userRoutes);
-app.get("/", (req, res) => {
-  res.json({ message: "Welcome to Reporting System API" });
-});
 
 // ERROR HANDLER (Middlewares)
 app.use((req, res, next) => {
-  const error = new Error("Resource Not Found");
-  error.status = 404;
-  next(error);
+  const err = new Error("Resource Not Found");
+  err.status = 404;
+  next(err);
 });
 
 app.use(errorHandler);
