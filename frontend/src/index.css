@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-givsum-bg: #ffd099;
+  --color-givsum-accent: #ff725e;
+  --color-givsum-text: #5c3817;
+  --color-givsum-input: #ffe6cc;
+  --radius-givsum: 2.5rem;
+}
+
+/* Tambahkan ini untuk latar belakang yang unik */
+.mesh-gradient {
+  background-color: #000000;
+  background-image:
+    radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+    radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
+}

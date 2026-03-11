@@ -62,7 +62,6 @@ const signInUser = async (userData) => {
   const { password, email, userName } = userData;
 
   const existingUser = await userRepository.findDuplicate(email, userName);
-  console.log(existingUser);
 
   const isPasswordValid =
     existingUser && (await comparePassword(password, existingUser.password));
@@ -85,4 +84,17 @@ const signInUser = async (userData) => {
   return { modifiedUser, token };
 };
 
-module.exports = { registerUser, signInUser };
+const findUserProfile = async (userId) => {
+  const existingUser = await userRepository.findOneUser(userId);
+
+  if (!existingUser) throw new Error("User tidak ditemukan");
+
+  const modifiedUser = {
+    ...existingUser,
+    lastLogin: new Date(),
+  };
+
+  return modifiedUser;
+};
+
+module.exports = { registerUser, signInUser, findUserProfile };

@@ -1,4 +1,8 @@
-const { registerUser, signInUser } = require("../services/user.service");
+const {
+  registerUser,
+  signInUser,
+  findUserProfile,
+} = require("../services/user.service");
 const userDTO = require("../dto/user.dto");
 
 const createUser = async (req, res, next) => {
@@ -19,8 +23,8 @@ const createUser = async (req, res, next) => {
 const loginUser = async (req, res, next) => {
   try {
     const { modifiedUser, token } = await signInUser(req.body);
-    console.log(modifiedUser);
-    res.status(201).json({
+
+    res.status(200).json({
       success: true,
       message: "login berhasil",
       token,
@@ -31,7 +35,24 @@ const loginUser = async (req, res, next) => {
   }
 };
 
+const getUserProfile = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+
+    const modifiedUser = await findUserProfile(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Berhasil mendapatkan data user",
+      data: userDTO(modifiedUser),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createUser,
   loginUser,
+  getUserProfile,
 };

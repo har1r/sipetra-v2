@@ -10,6 +10,10 @@ class UserRepository {
       $or: [{ email: email.toLowerCase() }, { userName: userName }],
     }).lean();
   }
+
+  async findOneUser(userId) {
+    return User.findById(userId).lean();
+  }
 }
 
 module.exports = new UserRepository();

@@ -3,18 +3,26 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 
+const healhtRoutes = require("./routes/health.route");
 const userRoutes = require("./routes/user.route");
 const errorHandler = require("./middlewares/error.middleware");
 const app = express();
 
 // MIDDLEWARES GLOBAL
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ROUTES
+app.use("/api", healhtRoutes);
 app.use("/api/users", userRoutes);
 
 // ERROR HANDLER (Middlewares)
