@@ -5,35 +5,27 @@ import { AlertTriangle } from 'lucide-react';
 
 // ==================== CONTEXT TYPE ====================
 interface DashboardContextType {
-  // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
-  // Mobile menu
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
 
-  // Profile drawer
   isPersonalProfileDrawerOpen: boolean;
   setIsPersonalProfileDrawerOpen: (open: boolean) => void;
 
-  // Sidebar stats refresh trigger
   sidebarStatsTrigger: number;
   triggerRefreshSidebarStats: () => void;
 
-  // Favorites
-  favoritePermohonans: any[];
+  favoriteApplications: any[];
   refreshFavorites: () => Promise<void>;
 
-  // Global request state (used by feature workspaces)
   globalSelectedRequest: any | null;
   setGlobalSelectedRequest: (request: any | null) => void;
 
-  // Duplicate application flow
   duplicatedApplicationData: any | null;
   setDuplicatedApplicationData: (data: any | null) => void;
 
-  // Universal confirm modal
   showConfirm: (params: {
     title: string;
     message: string;
@@ -45,17 +37,15 @@ interface DashboardContextType {
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
-// ==================== PROVIDER ====================
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPersonalProfileDrawerOpen, setIsPersonalProfileDrawerOpen] = useState(false);
   const [sidebarStatsTrigger, setSidebarStatsTrigger] = useState(0);
-  const [favoritePermohonans, setFavoritePermohonans] = useState<any[]>([]);
+  const [favoriteApplications, setFavoritePermohonans] = useState<any[]>([]);
   const [globalSelectedRequest, setGlobalSelectedRequest] = useState<any | null>(null);
   const [duplicatedApplicationData, setDuplicatedApplicationData] = useState<any | null>(null);
 
-  // Confirmation Modal
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -67,16 +57,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
-  // ==================== CALLBACKS ====================
   const triggerRefreshSidebarStats = useCallback(() => {
     setSidebarStatsTrigger(prev => prev + 1);
   }, []);
 
   const refreshFavorites = useCallback(async () => {
-    // Will be implemented when favorite feature is rebuilt
     setFavoritePermohonans([]);
   }, []);
 
@@ -106,7 +94,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // ==================== CONTEXT VALUE ====================
   const contextValue = useMemo(() => ({
     searchQuery,
     setSearchQuery,
@@ -116,7 +103,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setIsPersonalProfileDrawerOpen,
     sidebarStatsTrigger,
     triggerRefreshSidebarStats,
-    favoritePermohonans,
+    favoriteApplications,
     refreshFavorites,
     globalSelectedRequest,
     setGlobalSelectedRequest,
@@ -126,7 +113,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   }), [
     searchQuery, isMobileMenuOpen, isPersonalProfileDrawerOpen,
     sidebarStatsTrigger, triggerRefreshSidebarStats,
-    favoritePermohonans, refreshFavorites,
+    favoriteApplications, refreshFavorites,
     globalSelectedRequest, duplicatedApplicationData,
     showConfirm,
   ]);
@@ -135,7 +122,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     <DashboardContext.Provider value={contextValue}>
       {children}
 
-      {/* GLOBAL UNIVERSAL CONFIRMATION MODAL */}
       {confirmModal.isOpen && (
         <div
           id="universal-confirm-backdrop"

@@ -32,6 +32,7 @@ enum ApplicationType {
   CORRECTION
   REACTIVATION
   MERGER_MUTATION
+  MERGER_AND_PARTIAL_MUTATION
 }
 
 enum ApplicationStatus {
@@ -137,27 +138,27 @@ model Application {
 }
 
 type TaxSubjectData {
-  name                String?
-  whatsappNumber      String?
-  address             String?
+  name                String
+  whatsappNumber      String
+  address             String
   block               String?
-  neighborhoodUnit    String?
-  communityUnit       String?
-  subdistrict         String?
-  village             String?
+  neighborhoodUnit    String
+  communityUnit       String
+  subdistrict         String
+  village             String
 }
 
 type TaxObjectData {
-  nop                 String?
-  nopTemporary        String?
+  nop                 String
+  nopTemporary        String
   nopFinal            String?
-  address             String?
+  address             String
   block               String?
-  neighborhoodUnit    String?
-  communityUnit       String?
-  subdistrict         String?
-  village             String?
-  landArea            Float?
+  neighborhoodUnit    String
+  communityUnit       String
+  subdistrict         String
+  village             String
+  landArea            Float
   buildingArea        Float?
   certificate         String?
 }
@@ -166,7 +167,6 @@ type ComplementaryData {
   taxSubjectData          TaxSubjectData
   taxObjectData           TaxObjectData
   isPrimary           Boolean         @default(false)
-  notes               String?
 }
 
 type RequestedData {

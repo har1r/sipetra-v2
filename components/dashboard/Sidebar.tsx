@@ -38,7 +38,7 @@ interface MenuItem {
 
 export default function Sidebar() {
   const {
-    favoritePermohonans,
+    favoriteApplications,
     setSearchQuery,
     setIsPersonalProfileDrawerOpen,
     setIsMobileMenuOpen,
@@ -64,7 +64,6 @@ export default function Sidebar() {
     return userRoleRaw.charAt(0).toUpperCase() + userRoleRaw.slice(1).toLowerCase();
   }, [userRoleRaw]);
 
-  const [showProjects, setShowProjects] = useState(false);
   const [showCollections, setShowCollections] = useState(false);
   const [showAllFavorites, setShowAllFavorites] = useState(false);
 
@@ -232,38 +231,8 @@ export default function Sidebar() {
                 })}
               </nav>
 
-              {/* Accordion Projects & Favorites */}
+              {/* Accordion Favorites */}
               <div className="flex flex-col gap-0.5 pt-1">
-
-                {/* Projects */}
-                <div>
-                  <button
-                    onClick={() => setShowProjects(!showProjects)}
-                    className="w-full flex items-center justify-between group px-2.5 py-2 rounded-md text-[13px] font-medium text-slate-700 hover:bg-slate-100/80 hover:text-slate-900 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
-                        <ChevronRight
-                          className={`w-3.5 h-3.5 text-slate-500 group-hover:text-slate-900 transition-transform duration-200 ${showProjects ? 'rotate-90 text-slate-900' : ''
-                            }`}
-                        />
-                      </div>
-                      <Folder
-                        className={`w-4 h-4 shrink-0 transition-all ${showProjects ? 'text-slate-900 fill-slate-900/15 stroke-[2.2]' : 'text-slate-500 fill-none group-hover:text-slate-900 stroke-[1.8]'
-                          }`}
-                      />
-                      <span className={showProjects ? 'text-slate-900 font-semibold' : ''}>Projects</span>
-                    </div>
-                  </button>
-                  {showProjects && (
-                    <div className="pl-12 flex flex-col gap-0.5">
-                      <div className="py-1 px-2 text-[11px] text-slate-500 font-normal italic">
-                        Belum ada permohonan masuk
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 {/* Favorites */}
                 <div>
                   <button
@@ -283,19 +252,19 @@ export default function Sidebar() {
                       />
                       <span className={showCollections ? 'text-slate-900 font-semibold' : ''}>Favorit</span>
                     </div>
-                    {favoritePermohonans?.length > 0 && (
+                    {favoriteApplications?.length > 0 && (
                       <span className="text-[11px] font-semibold text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded-full">
-                        {favoritePermohonans.length}
+                        {favoriteApplications.length}
                       </span>
                     )}
                   </button>
                   {showCollections && (
                     <div className="pl-12 flex flex-col gap-0.5">
-                      {favoritePermohonans?.length > 0 ? (
+                      {favoriteApplications?.length > 0 ? (
                         <>
                           {(showAllFavorites
-                            ? favoritePermohonans
-                            : favoritePermohonans.slice(0, 5)
+                            ? favoriteApplications
+                            : favoriteApplications.slice(0, 5)
                           ).map((fav) => {
                             const appNumber =
                               fav.applicationNumber || fav.nomorPelayanan || fav.nomorPermohonan;
@@ -316,7 +285,7 @@ export default function Sidebar() {
                               </button>
                             );
                           })}
-                          {favoritePermohonans.length > 5 && (
+                          {favoriteApplications.length > 5 && (
                             <button
                               onClick={() => setShowAllFavorites(!showAllFavorites)}
                               className="w-full text-left py-1.5 px-2 text-[11px] font-semibold text-slate-500 hover:text-slate-900 cursor-pointer"
@@ -327,7 +296,7 @@ export default function Sidebar() {
                         </>
                       ) : (
                         <div className="py-1 px-2 text-[11px] text-slate-500 italic">
-                          Belum ada NOPEL favorit
+                          Belum ada permohonan favorit
                         </div>
                       )}
                     </div>
