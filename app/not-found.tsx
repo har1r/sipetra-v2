@@ -22,10 +22,10 @@ export default function NotFound() {
                     Maaf, halaman yang anda cari tidak tersedia, telah dipindahkan, atau tautan yang Anda tuju salah.
                 </p>
 
-                <div className='flex flex-col  sm:flex-row gap-3 justify-center'>
+                <div className='flex flex-col sm:flex-row gap-3 justify-center'>
                     <Link
-                        href="/dashboard/home "
-                        className='inline-flex items-center justify-center  gap-2 px-5 py-2.5 bg-[#00a389]/90 hover:bg-[#00a389] text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-indigo-200'
+                        href="/dashboard/home"
+                        className='inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#00a389] hover:bg-[#008670] text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-[#00a389]/20'
                     >
                         <Home className='w-4 h-4' />
                         Ke Beranda
@@ -34,6 +34,6 @@ export default function NotFound() {
                 </div>
             </div>
         </div>
-    )
-};
+    );
+}
 
