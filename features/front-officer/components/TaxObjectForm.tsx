@@ -1,26 +1,30 @@
 'use client';
 
 import React from 'react';
-import { UseFormRegister, FieldErrors, get } from 'react-hook-form';
+import { UseFormRegister, FieldErrors, UseFormSetValue, get } from 'react-hook-form';
+import { formatNopInput } from '@/lib/utils';
 
 interface TaxObjectFormProps {
     prefix: string;
     register: UseFormRegister<any>;
     errors: FieldErrors<any>;
+    setValue?: UseFormSetValue<any>;
     title?: string;
     description?: string;
     isRequestedData?: boolean;
-    isCorrection?: boolean;
+    isNewOrReactivation?: boolean;
+    isFirstSection?: boolean;
 }
 
 export function TaxObjectForm({
     prefix,
     register,
     errors,
+    setValue,
     title = 'Informasi Objek Pajak',
-    description = 'Permohonan dengan jenis selain Pembetulan, maka Alamat, Blok, RT, RW, Kecamatan, Kelurahan / Desa, bukti kepemilikan objek pajak boleh tidak diisi.',
     isRequestedData = false,
-    isCorrection = false,
+    isNewOrReactivation = false,
+    isFirstSection = false,
 }: TaxObjectFormProps) {
     const getFieldError = (fieldName: string) => {
         const errorObj = get(errors, `${prefix}.${fieldName}`);
@@ -28,7 +32,6 @@ export function TaxObjectForm({
     };
 
     const nopErr = getFieldError('nop');
-    const nopTempErr = getFieldError('nopTemporary');
     const addressErr = getFieldError('address');
     const blockErr = getFieldError('block');
     const rtErr = getFieldError('neighborhoodUnit');
@@ -38,28 +41,34 @@ export function TaxObjectForm({
     const landAreaErr = getFieldError('landArea');
     const buildingAreaErr = getFieldError('buildingArea');
     const certificateErr = getFieldError('certificate');
+    const reqNopErr = get(errors, 'requestedNop')?.message as string | undefined;
 
-    const isAddressRequired = isRequestedData || isCorrection;
-    const isBlockRtRwRequired = isCorrection;
+    const isLandAreaRequired = isRequestedData || !isNewOrReactivation;
+    const isCertRequired = isRequestedData || !isNewOrReactivation;
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
-            <div className="lg:col-span-4 space-y-1">
-                <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 ${isFirstSection ? '' : 'border-t border-slate-200'}`}>
+            <div className="lg:col-span-4">
+                <h3 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h3>
             </div>
 
             <div className="lg:col-span-8 space-y-4">
                 {!isRequestedData ? (
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Nomor Objek Pajak <span className="text-rose-500">*</span>
+                            Nomor Objek Pajak <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
-                            maxLength={18}
+                            maxLength={24}
                             {...register(`${prefix}.nop` as const)}
-                            placeholder="3619XXXXXXXXXXXXXXXX"
+                            onChange={(e) => {
+                                const formatted = formatNopInput(e.target.value);
+                                if (setValue) {
+                                    setValue(`${prefix}.nop`, formatted, { shouldValidate: true });
+                                }
+                            }}
+                            placeholder="36.19.150.008.009.0867-0"
                             className={`w-full bg-slate-50 border font-mono ${nopErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all tracking-wider`}
                         />
@@ -70,29 +79,41 @@ export function TaxObjectForm({
                 ) : (
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            NOP Sementara <span className="text-rose-500">*</span>
+                            Nomor Objek Pajak <span className="text-rose-500">*</span>
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.nopTemporary` as const)}
-                            placeholder="3619XXXXXXXXXXXXXXXX"
-                            className={`w-full bg-slate-50 border font-mono ${nopTempErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                            maxLength={24}
+                            {...register('requestedNop')}
+                            onChange={(e) => {
+                                const formatted = formatNopInput(e.target.value);
+                                if (setValue) {
+                                    setValue('requestedNop', formatted, { shouldValidate: true });
+                                }
+                            }}
+                            placeholder="36.19.150.008.009.0867-0"
+                            className={`w-full bg-slate-50 border font-mono ${reqNopErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
                         />
-                        {nopTempErr && (
-                            <p className="text-xs text-rose-500 mt-1 font-medium">{nopTempErr}</p>
+                        {reqNopErr && (
+                            <p className="text-xs text-rose-500 mt-1 font-medium">{reqNopErr}</p>
                         )}
                     </div>
                 )}
 
                 <div>
                     <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                        Alamat Objek Pajak <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                        Alamat Objek Pajak{' '}
+                        {isRequestedData ? (
+                            <span className="text-rose-500">*</span>
+                        ) : (
+                            <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                        )}
                     </label>
                     <textarea
                         rows={2}
                         {...register(`${prefix}.address` as const)}
-                        placeholder="Jl. Pahlawan Blok B2 No. 10"
+                        placeholder="Jl. Pahlawan B2 No. 10"
                         className={`w-full bg-slate-50 border ${addressErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                             } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all resize-none`}
                     />
@@ -104,7 +125,7 @@ export function TaxObjectForm({
                 <div className="grid grid-cols-3 gap-3">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Blok Objek <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            Blok Objek <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -119,7 +140,7 @@ export function TaxObjectForm({
                     </div>
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            RT Objek <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            RT Objek <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -134,7 +155,7 @@ export function TaxObjectForm({
                     </div>
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            RW Objek <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            RW Objek <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -152,7 +173,12 @@ export function TaxObjectForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Kecamatan Objek <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                            Kecamatan Objek{' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <input
                             type="text"
@@ -168,7 +194,12 @@ export function TaxObjectForm({
 
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Kelurahan / Desa Objek <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                            Kelurahan / Desa Objek{' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <input
                             type="text"
@@ -186,7 +217,12 @@ export function TaxObjectForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Luas Bumi (m²) <span className="text-rose-500">*</span>
+                            Luas Tanah (m²){' '}
+                            {isLandAreaRequired ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <div className="flex rounded-sm border border-slate-200 overflow-hidden bg-slate-50 focus-within:bg-white focus-within:border-[#00a389]">
                             <input
@@ -207,7 +243,12 @@ export function TaxObjectForm({
 
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Luas Bangunan (m²) <span className="text-rose-500">*</span>
+                            Luas Bangunan (m²){' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <div className="flex rounded-sm border border-slate-200 overflow-hidden bg-slate-50 focus-within:bg-white focus-within:border-[#00a389]">
                             <input
@@ -229,7 +270,12 @@ export function TaxObjectForm({
 
                 <div>
                     <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                        Bukti Kepemilikan <span className="text-rose-500">{isRequestedData ? '*' : '(Opsional)'}</span>
+                        Bukti Kepemilikan{' '}
+                        {isCertRequired ? (
+                            <span className="text-rose-500">*</span>
+                        ) : (
+                            <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                        )}
                     </label>
                     <input
                         type="text"

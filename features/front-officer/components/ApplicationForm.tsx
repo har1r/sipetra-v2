@@ -3,35 +3,60 @@
 import React, { useState, useTransition } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
 import {
     ApplicationFormInput,
     applicationFormSchema,
     APPLICATION_TYPE_LABELS,
     ApplicationTypeEnum,
 } from '../schemas/application.schema';
-import { createApplication, editApplication } from '../actions/application.actions';
+import { createApplication, editApplication, duplicateApplication } from '../actions/application.actions';
 import { TaxSubjectForm } from './TaxSubjectForm';
 import { TaxObjectForm } from './TaxObjectForm';
 import { BackButton } from '@/components/ui/BackButton';
 import { Loader2, Upload, Paperclip, X } from 'lucide-react';
+import { formatNopInput } from '@/lib/utils';
 
 interface ApplicationFormProps {
-    mode: 'create' | 'edit';
+    mode: 'create' | 'edit' | 'duplicate';
     initialData?: ApplicationFormInput & { id?: string };
     onSuccess?: (result: { id: string; applicationId: string }) => void;
 }
 
 export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFormProps) {
+    const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [serverError, setServerError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    const defaultValues: ApplicationFormInput = initialData || {
-        applicationType: 'PARTIAL_MUTATION',
+    const sanitizedInitialData: ApplicationFormInput | undefined = initialData
+        ? {
+            ...initialData,
+            applicationId: mode === 'duplicate' ? '' : initialData.applicationId,
+            smartgovId: mode === 'duplicate' ? '' : initialData.smartgovId,
+            smartgovCreatedAt: mode === 'duplicate' ? null : initialData.smartgovCreatedAt,
+            smartgovCompletedAt: mode === 'duplicate' ? null : initialData.smartgovCompletedAt,
+            requestedNop: formatNopInput(initialData.requestedNop || ''),
+            taxObject: {
+                ...(initialData.taxObject || {}),
+                nop: formatNopInput(initialData.taxObject?.nop || ''),
+            },
+            complementary: (initialData.complementary || []).map((item: any) => ({
+                ...item,
+                taxObjectData: {
+                    ...(item?.taxObjectData || {}),
+                    nop: formatNopInput(item?.taxObjectData?.nop || ''),
+                },
+            })),
+        }
+        : undefined;
+
+    const defaultValues: ApplicationFormInput = sanitizedInitialData || {
+        applicationType: '' as any,
         applicationId: '',
         smartgovId: '',
-        smartgovCreatedAt: new Date(),
+        requestedNop: '',
         complementary: [
             {
                 taxSubjectData: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
@@ -39,7 +64,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
             },
         ],
         taxSubject: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
-        taxObject: { nopTemporary: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
+        taxObject: { nop: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
         files: [],
         note: '',
     };
@@ -47,6 +72,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
     const form = useForm<ApplicationFormInput>({
         resolver: zodResolver(applicationFormSchema as any),
         defaultValues,
+        mode: 'onChange',
     });
 
     const {
@@ -62,12 +88,12 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
     const currentAppType = watch('applicationType');
     const isNewTaxObject = currentAppType === 'NEW_TAX_OBJECT';
     const isReactivation = currentAppType === 'REACTIVATION';
-    const isNoComplementary = isNewTaxObject || isReactivation;
-    const isCorrection = currentAppType === 'CORRECTION';
+    const isNewOrReactivation = isNewTaxObject || isReactivation;
+    const isMerger = currentAppType === 'MERGER_MUTATION' || currentAppType === 'MERGER_AND_PARTIAL_MUTATION';
 
     const steps = [
         { id: 'info', title: 'Informasi Permohonan' },
-        ...(!isNoComplementary ? [{ id: 'complementary', title: 'Data Pelengkap (Asal)' }] : []),
+        { id: 'complementary', title: 'Data Pelengkap' },
         { id: 'requested', title: 'Data Dimohonkan' },
         { id: 'review', title: 'Ringkasan & Simpan' },
     ];
@@ -84,20 +110,43 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
         name: 'complementary',
     });
 
+    const scrollToFirstError = () => {
+        setTimeout(() => {
+            const firstErrorEl = document.querySelector<HTMLElement>(
+                '.border-rose-400, .bg-rose-50\\/30, p.text-rose-500'
+            );
+            if (firstErrorEl) {
+                const inputEl = firstErrorEl.tagName === 'P' ? (firstErrorEl.previousElementSibling as HTMLElement) || firstErrorEl : firstErrorEl;
+                inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (inputEl.focus) {
+                    inputEl.focus();
+                }
+            }
+        }, 80);
+    };
+
     const handleNextStep = async () => {
         let isStepValid = true;
 
         if (activeStep.id === 'info') {
-            isStepValid = await trigger(['applicationType', 'applicationId', 'smartgovId', 'smartgovCreatedAt']);
+            const selectedType = watch('applicationType');
+            if (!selectedType) {
+                form.setError('applicationType', { type: 'manual', message: 'Jenis permohonan wajib dipilih' });
+                isStepValid = false;
+            } else {
+                isStepValid = await trigger('applicationType');
+            }
         } else if (activeStep.id === 'complementary') {
             isStepValid = await trigger('complementary');
         } else if (activeStep.id === 'requested') {
-            isStepValid = await trigger(['taxSubject', 'taxObject', 'files', 'note']);
+            isStepValid = await trigger(['taxSubject', 'taxObject', 'requestedNop', 'files', 'note']);
         }
 
         if (isStepValid && currentStepIndex < totalSteps - 1) {
             setCurrentStepIndex((prev) => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            scrollToFirstError();
         }
     };
 
@@ -116,6 +165,8 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
             const res =
                 mode === 'create'
                     ? await createApplication(data)
+                    : mode === 'duplicate'
+                    ? await duplicateApplication(initialData?.id!, data)
                     : await editApplication(initialData?.id!, data);
 
             if (res.success && res.data) {
@@ -123,12 +174,15 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                 if (onSuccess) {
                     onSuccess(res.data);
                 }
+                router.push('/dashboard/front-officer/pengajuan');
+                router.refresh();
             } else {
                 setServerError(res.message || 'Gagal menyimpan permohonan.');
                 if (res.errors) {
                     Object.entries(res.errors).forEach(([key, messages]) => {
                         form.setError(key as any, { message: messages[0] });
                     });
+                    scrollToFirstError();
                 }
             }
         });
@@ -143,7 +197,11 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
             <div className="space-y-1 px-1 mb-10">
                 <BackButton />
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                    {mode === 'create' ? 'Tambah Permohonan Baru' : 'Edit Permohonan Data Entry'}
+                    {mode === 'create'
+                        ? 'Tambah Permohonan Baru'
+                        : mode === 'duplicate'
+                        ? 'Duplikasi Permohonan'
+                        : 'Edit Permohonan Data Entry'}
                 </h1>
                 <p className="text-xs text-slate-500 max-w-3xl">
                     Lengkapi formulir pendaftaran layanan permohonan Pajak Bumi dan/atau Bangunan sesuai dengan dokumen pelayanan fisik dan SmartGov.
@@ -212,11 +270,8 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                     {activeStep.id === 'info' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                <div className="lg:col-span-4 space-y-1">
-                                    <h3 className="text-sm font-semibold text-slate-800">Kategori Permohonan</h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">
-                                        Pilih jenis permohonan Pajak Bumi dan Bangunan yang diajukan oleh Wajib Pajak.
-                                    </p>
+                                <div className="lg:col-span-4">
+                                    <h3 className="text-sm font-bold text-slate-800 tracking-tight">Kategori Permohonan</h3>
                                 </div>
 
                                 <div className="lg:col-span-8 space-y-1">
@@ -231,96 +286,101 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                             return (
                                                 <div
                                                     key={key}
-                                                    onClick={() => setValue('applicationType', key)}
+                                                    onClick={() => {
+                                                        setValue('applicationType', key, { shouldValidate: true });
+                                                        form.clearErrors('applicationType');
+                                                    }}
                                                     className={`p-3 rounded-sm border cursor-pointer transition-all ${isSelected
-                                                        ? 'border-[#00a389] bg-[#00a389]/10'
+                                                        ? 'border-[#00a389] bg-[#00a389]/10 shadow-2xs'
                                                         : 'border-slate-200 bg-slate-50/30 hover:border-slate-300 hover:bg-white'
                                                         }`}
                                                 >
-                                                    <span className={`font-semibold text-xs ${isSelected ? 'text-[#007a66]' : 'text-slate-800'}`}>
+                                                    <span className={`font-semibold text-xs block ${isSelected ? 'text-[#007a66]' : 'text-slate-800'}`}>
                                                         {label.title}
+                                                    </span>
+                                                    <span className="text-[11px] text-slate-500 font-normal mt-0.5 block leading-tight">
+                                                        {label.desc}
                                                     </span>
                                                 </div>
                                             );
                                         })}
                                     </div>
+                                    {errors.applicationType && (
+                                        <p className="text-xs text-rose-500 mt-2 font-medium">
+                                            {errors.applicationType.message}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
-                                <div className="lg:col-span-4 space-y-1">
-                                    <h3 className="text-sm font-semibold text-slate-800">Nomor Registrasi</h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">
-                                        Nomor permohonan internal SIPETRA dan nomor pelayanan pada sistem SmartGov.
-                                    </p>
-                                </div>
+                            {mode === 'edit' && (
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 border-t border-slate-200">
+                                    <div className="lg:col-span-4">
+                                        <h3 className="text-sm font-bold text-slate-800 tracking-tight">Informasi SmartGov</h3>
+                                    </div>
 
-                                <div className="lg:col-span-8">
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="lg:col-span-8 space-y-4">
                                         <div>
                                             <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                Nomor Permohonan <span className="text-rose-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                {...register('applicationId')}
-                                                placeholder="2026.001.99"
-                                                className={`w-full bg-slate-50 border ${errors.applicationId ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                                                    } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
-                                            />
-                                            {errors.applicationId && (
-                                                <p className="text-xs text-rose-500 mt-1 font-medium">
-                                                    {errors.applicationId.message}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                Nomor SmartGov <span className="text-rose-500">*</span>
+                                                Nomor Smartgov <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                                             </label>
                                             <input
                                                 type="text"
                                                 {...register('smartgovId')}
-                                                placeholder="SG-2026-9081"
-                                                className={`w-full bg-slate-50 border ${errors.smartgovId ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                                                    } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
-                                            />
-                                            {errors.smartgovId && (
-                                                <p className="text-xs text-rose-500 mt-1 font-medium">
-                                                    {errors.smartgovId.message}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                Tgl Pendaftaran SmartGov <span className="text-rose-500">*</span>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={
-                                                    watch('smartgovCreatedAt')
-                                                        ? new Date(watch('smartgovCreatedAt')).toISOString().split('T')[0]
-                                                        : ''
-                                                }
-                                                onChange={(e) => setValue('smartgovCreatedAt', new Date(e.target.value))}
+                                                placeholder="Contoh: SG-2026-9871"
                                                 className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all"
                                             />
                                         </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
+                                                    Tanggal Dibuat Smartgov <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={
+                                                        watch('smartgovCreatedAt')
+                                                            ? new Date(watch('smartgovCreatedAt')).toISOString().split('T')[0]
+                                                            : ''
+                                                    }
+                                                    onChange={(e) => {
+                                                        const val = e.target.value ? new Date(e.target.value) : null;
+                                                        setValue('smartgovCreatedAt', val, { shouldValidate: true });
+                                                    }}
+                                                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
+                                                    Tanggal Selesai Smartgov <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={
+                                                        watch('smartgovCompletedAt')
+                                                            ? new Date(watch('smartgovCompletedAt')).toISOString().split('T')[0]
+                                                            : ''
+                                                    }
+                                                    onChange={(e) => {
+                                                        const val = e.target.value ? new Date(e.target.value) : null;
+                                                        setValue('smartgovCompletedAt', val, { shouldValidate: true });
+                                                    }}
+                                                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
-                    {activeStep.id === 'complementary' && !isNoComplementary && (
+                    {activeStep.id === 'complementary' && (
                         <div className="space-y-6">
-                            {(currentAppType === 'MERGER_MUTATION' || currentAppType === 'MERGER_AND_PARTIAL_MUTATION') && (
-                                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                                    <span className="text-xs font-semibold text-slate-500">
-                                        Daftar NOP Asal ({compFields.length} Objek)
-                                    </span>
+                            {isMerger && (
+                                <div className="flex items-center justify-end">
                                     <button
                                         type="button"
                                         onClick={() =>
@@ -331,21 +391,24 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                         }
                                         className="px-3 py-1.5 bg-[#00a389]/10 hover:bg-[#00a389]/20 text-[#007a66] text-xs font-semibold rounded-sm transition-colors cursor-pointer"
                                     >
-                                        Tambah NOP Asal
+                                        Tambah Data Pelengkap
                                     </button>
+                                </div>
+                            )}
+
+                            {errors.complementary && typeof errors.complementary.message === 'string' && (
+                                <div className="p-3 bg-rose-50 border border-rose-200 rounded-sm text-xs text-rose-600 font-medium">
+                                    {errors.complementary.message}
                                 </div>
                             )}
 
                             {compFields.map((field, idx) => (
                                 <div key={field.id} className="space-y-4">
-                                    <div className="flex items-center justify-between pb-1 border-slate-200">
-                                        <div className="flex items-center gap-2">
+                                    {isMerger && compFields.length > 1 && (
+                                        <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                                             <span className="text-xs font-bold text-slate-800">
-                                                NOP Asal #{idx + 1}
+                                                Data Pelengkap #{idx + 1}
                                             </span>
-                                        </div>
-
-                                        {compFields.length > 1 && (
                                             <button
                                                 type="button"
                                                 onClick={() => removeComp(idx)}
@@ -353,25 +416,28 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                             >
                                                 Hapus
                                             </button>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
 
                                     <TaxSubjectForm
                                         prefix={`complementary.${idx}.taxSubjectData`}
                                         register={register}
                                         errors={errors}
-                                        title={`Data Subjek Pajak Asal #${idx + 1}`}
-                                        isCorrection={isCorrection}
+                                        title={isMerger ? `Data Subjek Pajak #${idx + 1}` : 'Data Subjek Pajak'}
                                         isRequestedData={false}
+                                        isNewOrReactivation={isNewOrReactivation}
+                                        isFirstSection={idx === 0 && !isMerger}
                                     />
 
                                     <TaxObjectForm
                                         prefix={`complementary.${idx}.taxObjectData`}
                                         register={register}
                                         errors={errors}
-                                        title={`Data Objek Pajak Asal #${idx + 1}`}
+                                        setValue={setValue}
+                                        title={isMerger ? `Data Objek Pajak #${idx + 1}` : 'Data Objek Pajak'}
                                         isRequestedData={false}
-                                        isCorrection={isCorrection}
+                                        isNewOrReactivation={isNewOrReactivation}
+                                        isFirstSection={false}
                                     />
                                 </div>
                             ))}
@@ -384,33 +450,32 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                 prefix="taxSubject"
                                 register={register}
                                 errors={errors}
-                                title="Data Wajib Pajak Pemohon"
-                                isCorrection={isCorrection}
+                                title="Data Subjek Pajak"
                                 isRequestedData={true}
+                                isNewOrReactivation={isNewOrReactivation}
+                                isFirstSection={true}
                             />
 
                             <TaxObjectForm
                                 prefix="taxObject"
                                 register={register}
                                 errors={errors}
-                                title="Data Objek Pajak Dimohonkan"
+                                setValue={setValue}
+                                title="Data Objek Pajak"
                                 isRequestedData={true}
-                                isCorrection={isCorrection}
+                                isNewOrReactivation={isNewOrReactivation}
+                                isFirstSection={false}
                             />
 
-                            {/* Section: Catatan & Lampiran Berkas Digital */}
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
-                                <div className="lg:col-span-4 space-y-1">
-                                    <h3 className="text-sm font-semibold text-slate-800">Catatan & Berkas Persyaratan</h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">
-                                        Tambahkan catatan pendaftaran dan unggah berkas persyaratan permohonan (KTP, Sertifikat, SPPT, dll.).
-                                    </p>
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 border-t border-slate-200">
+                                <div className="lg:col-span-4">
+                                    <h3 className="text-sm font-bold text-slate-800 tracking-tight">Catatan & Berkas Persyaratan</h3>
                                 </div>
 
                                 <div className="lg:col-span-8 space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                            Catatan Permohonan <span className="text-slate-400 font-normal">(Opsional)</span>
+                                            Catatan Permohonan <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                                         </label>
                                         <textarea
                                             rows={2}
@@ -422,7 +487,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
 
                                     <div>
                                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                            Upload Berkas Persyaratan <span className="text-slate-400 font-normal">(Opsional)</span>
+                                            Upload Berkas Persyaratan <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                                         </label>
                                         <div className="p-4 border-2 border-dashed border-slate-200 rounded-sm bg-slate-50/50 hover:bg-slate-50 hover:border-[#00a389]/60 transition-all text-center space-y-2">
                                             <input
@@ -491,19 +556,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
                                     <p className="text-slate-500 font-semibold capitalize">Jenis Permohonan</p>
                                     <p className="font-bold text-slate-800 text-sm">
-                                        {APPLICATION_TYPE_LABELS[currentAppType]?.title}
-                                    </p>
-                                </div>
-                                <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Nomor Permohonan</p>
-                                    <p className="font-bold text-slate-800 text-sm">
-                                        {watch('applicationId') || '-'}
-                                    </p>
-                                </div>
-                                <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Nomor SmartGov</p>
-                                    <p className="font-bold text-slate-800 text-sm">
-                                        {watch('smartgovId') || '-'}
+                                        {APPLICATION_TYPE_LABELS[currentAppType]?.title || '-'}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
@@ -513,17 +566,15 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">NOP Asal</p>
+                                    <p className="text-slate-500 font-semibold capitalize">Nomor Objek Pajak</p>
                                     <p className="font-bold text-slate-800 text-sm">
-                                        {isNoComplementary
-                                            ? '0 (Tanpa NOP Asal)'
-                                            : `${compFields.length} Objek Pajak Asal`}
+                                        {watch('requestedNop') || '-'}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Berkas Terlampir</p>
+                                    <p className="text-slate-500 font-semibold capitalize">Jumlah Data Pelengkap</p>
                                     <p className="font-bold text-slate-800 text-sm">
-                                        {watch('files')?.length || 0} Berkas
+                                        {`${compFields.length} Data Pelengkap`}
                                     </p>
                                 </div>
                             </div>

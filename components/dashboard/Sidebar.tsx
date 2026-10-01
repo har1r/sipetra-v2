@@ -93,7 +93,7 @@ export default function Sidebar() {
 
   // MODEL 2: 7 WORKFLOW STEPS DATA (TIMELINE STEPPER 1-7)
   const workflowSteps = [
-    { stepNum: 1, id: 'pengajuan', label: 'Pengajuan', href: '/dashboard/workflow/pengajuan', icon: FilePlus, sla: 'Luar SLA' },
+    { stepNum: 1, id: 'pengajuan', label: 'Pengajuan', href: '/dashboard/front-officer/pengajuan', icon: FilePlus, sla: 'Luar SLA' },
     { stepNum: 2, id: 'verifikasi', label: 'Verifikasi', href: '/dashboard/workflow/verifikasi', icon: SearchCheck, sla: '2 Hari' },
     { stepNum: 3, id: 'paraf-ktu', label: 'Paraf KTU', href: '/dashboard/workflow/paraf-ktu', icon: PenTool, sla: '2 Hari' },
     { stepNum: 4, id: 'ttd-kupt', label: 'TTD KUPT', href: '/dashboard/workflow/ttd-kupt', icon: FileCheck2, sla: '2 Hari' },

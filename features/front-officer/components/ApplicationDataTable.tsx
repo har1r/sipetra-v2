@@ -16,38 +16,56 @@ import {
     MoreVertical,
     FileText,
     Plus,
+    Pencil,
+    Copy,
 } from 'lucide-react';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '../schemas/application.schema';
+import { formatNopInput, formatShortDate } from '@/lib/utils';
 
-interface ApplicationItem {
+export interface ApplicationItem {
     id: string;
-    applicationId?: string;
-    applicationNumber?: string;
-    smartgovId?: string;
+    applicationId: string;
+    smartgovId?: string | null;
     applicationType: ApplicationTypeEnum;
     status: string;
-    serviceNumberDate?: Date | string;
-    smartgovCreatedAt?: Date | string;
-    completionDate?: Date | string | null;
-    taxSubject?: any;
-    taxObject?: any;
-    requestedData?: any;
-    complementary?: any;
-    complementaryData?: any;
+    requestedNop?: string | null;
+    taxSubject?: {
+        name?: string;
+        whatsappNumber?: string;
+        address?: string;
+        [key: string]: any;
+    };
+    taxObject?: {
+        nop?: string;
+        address?: string;
+        landArea?: number | null;
+        buildingArea?: number | null;
+        [key: string]: any;
+    };
+    complementary?: Array<{
+        taxSubjectData?: any;
+        taxObjectData?: any;
+    }>;
+    smartgovCreatedAt?: Date | string | null;
+    smartgovCompletedAt?: Date | string | null;
+    completedAt?: Date | string | null;
+    createdAt?: Date | string;
     updatedAt: Date | string;
 }
 
-interface DataEntryWorkspaceTableProps {
+interface ApplicationDataTableProps {
     applications: ApplicationItem[];
+    actionRole?: 'FRONT_OFFICER' | 'VERIFICATOR' | string;
+    renderActions?: (app: ApplicationItem) => React.ReactNode;
 }
 
-export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTableProps) {
+export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER', renderActions }: ApplicationDataTableProps) {
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [selectedType, setSelectedType] = useState<string>('ALL');
     const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
     const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-    // Filter Options
     const typeOptions = [
         { key: 'ALL', label: 'Semua Jenis' },
         { key: 'PARTIAL_MUTATION', label: 'Mutasi Sebagian' },
@@ -68,7 +86,6 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
         { key: 'REJECTED', label: 'Rejected (Ditolak)' },
     ];
 
-    // Filtered Applications
     const filteredApplications = React.useMemo(() => {
         return applications.filter((app) => {
             const matchType = selectedType === 'ALL' || app.applicationType === selectedType;
@@ -77,43 +94,115 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
         });
     }, [applications, selectedType, selectedStatus]);
 
-    // Helper format tanggal singkat (Contoh: 12 Nov)
-    const formatDateShort = (dateVal: Date | string | null | undefined) => {
-        if (!dateVal) return '-';
-        const d = new Date(dateVal);
-        return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-    };
-
-    // Helper pecahan tanggal & bulan (Contoh: { day: 12, month: 'Nov' })
     const getDateParts = (dateVal: Date | string | null | undefined) => {
         if (!dateVal) return { day: '-', month: '-' };
         const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return { day: '-', month: '-' };
         return {
             day: d.getDate(),
             month: d.toLocaleDateString('id-ID', { month: 'short' }),
         };
     };
 
-    // Helper format NOP 18 Digit (Contoh: 36.19.150.008.009-0981.0)
-    const formatNop = (rawNop?: string) => {
-        if (!rawNop) return '36.19.150.008.009-0981.0';
-        const digits = rawNop.replace(/\D/g, '');
-        if (digits.length < 18) {
-            const padded = (digits || '361915000800909810').padEnd(18, '0').slice(0, 18);
-            return `${padded.slice(0, 2)}.${padded.slice(2, 4)}.${padded.slice(4, 7)}.${padded.slice(7, 10)}.${padded.slice(10, 13)}-${padded.slice(13, 17)}.${padded.slice(17, 18)}`;
+    const renderSmartgovIdPill = (sgId?: string | null) => {
+        if (!sgId) {
+            return (
+                <span className="inline-flex items-center justify-center px-2 py-0.5 text-slate-400 bg-slate-100/80 border border-slate-200/60 rounded-sm" title="Nomor SmartGov belum diisi">
+                    <Clock className="w-3.5 h-3.5" />
+                </span>
+            );
         }
-        return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 7)}.${digits.slice(7, 10)}.${digits.slice(10, 13)}-${digits.slice(13, 17)}.${digits.slice(17, 18)}`;
+        return (
+            <span className="inline-flex items-center gap-1 font-mono font-semibold text-emerald-800 text-[11px] bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-sm">
+                {sgId}
+            </span>
+        );
+    };
+
+    const renderSmartgovDate = (dateVal?: Date | string | null) => {
+        if (!dateVal) {
+            return (
+                <span className="inline-flex items-center text-slate-400" title="Tanggal SmartGov belum diisi">
+                    <Clock className="w-3.5 h-3.5" />
+                </span>
+            );
+        }
+        return <span className="text-xs text-slate-700 font-medium">{formatShortDate(dateVal)}</span>;
+    };
+
+    const renderActionDropdown = (app: ApplicationItem) => {
+        if (renderActions) return renderActions(app);
+
+        const isMenuOpen = openMenuId === app.id;
+        const isEditable = app.status === 'SUBMITTED' || app.status === 'REVISION';
+
+        return (
+            <div className="relative inline-block text-left">
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(isMenuOpen ? null : app.id);
+                    }}
+                    className={`p-1.5 rounded-sm transition-colors cursor-pointer ${
+                        isMenuOpen ? 'bg-slate-200 text-slate-800' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Pilihan Aksi"
+                >
+                    <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isMenuOpen && (
+                    <>
+                        <div
+                            className="fixed inset-0 z-40"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(null);
+                            }}
+                        />
+                        <div
+                            className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150 text-left"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {isEditable ? (
+                                <Link
+                                    href={`/dashboard/front-officer/applications/${app.id}/edit`}
+                                    onClick={() => setOpenMenuId(null)}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#00a389] transition-colors"
+                                >
+                                    <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                                    <span>Edit Permohonan</span>
+                                </Link>
+                            ) : (
+                                <span className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-300 cursor-not-allowed">
+                                    <Pencil className="w-3.5 h-3.5 text-slate-300" />
+                                    <span>Edit Terkunci</span>
+                                </span>
+                            )}
+
+                            <Link
+                                href={`/dashboard/front-officer/applications/${app.id}/duplicate`}
+                                onClick={() => setOpenMenuId(null)}
+                                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#00a389] transition-colors border-t border-slate-100"
+                            >
+                                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Duplikasi Permohonan</span>
+                            </Link>
+                        </div>
+                    </>
+                )}
+            </div>
+        );
     };
 
     const hasActiveFilters = selectedType !== 'ALL' || selectedStatus !== 'ALL';
 
     return (
         <div className="space-y-4">
-            {/* ================= TOP TOOLBAR CONTROL BAR ================= */}
+            {/* TOOLBAR CONTROL BAR */}
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-                {/* Kiri: Search, Date Picker, More Filters */}
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* Search Trigger Button */}
                     <button
                         type="button"
                         className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-500 rounded-sm transition-all cursor-pointer"
@@ -122,35 +211,28 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                         <Search className="w-4 h-4" />
                     </button>
 
-                    {/* Month-Year Navigator Pill */}
                     <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-sm px-2 py-1 text-xs font-semibold text-slate-700 gap-1">
                         <button type="button" className="p-1 hover:bg-slate-200/60 rounded-sm transition-colors cursor-pointer">
                             <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
-
                         <div className="flex items-center gap-1.5 px-2">
                             <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                            <span>September 2026</span>
+                            <span>Oktober 2026</span>
                         </div>
-
                         <button type="button" className="p-1 hover:bg-slate-200/60 rounded-sm transition-colors cursor-pointer">
                             <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                     </div>
 
-                    {/* More Filters Hover Popover Container */}
-                    <div
-                        className="relative"
-                        onMouseEnter={() => setIsFilterOpen(true)}
-                        onMouseLeave={() => setIsFilterOpen(false)}
-                    >
+                    <div className="relative">
                         <button
                             type="button"
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
-                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 border text-xs font-semibold rounded-sm transition-all cursor-pointer ${hasActiveFilters || isFilterOpen
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 border text-xs font-semibold rounded-sm transition-all cursor-pointer ${
+                                hasActiveFilters || isFilterOpen
                                     ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                     : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700'
-                                }`}
+                            }`}
                         >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             <span>More Filters</span>
@@ -159,11 +241,9 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                             )}
                         </button>
 
-                        {/* FLYOUT FILTER POPOVER CARD */}
                         {isFilterOpen && (
-                            <div className="absolute left-0 top-full mt-1.5 w-[540px] bg-white border border-slate-200/90 rounded-sm shadow-xl p-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150 before:absolute before:-top-2 before:left-0 before:right-0 before:h-2">
+                            <div className="absolute left-0 top-full mt-1.5 w-[540px] bg-white border border-slate-200/90 rounded-sm shadow-xl p-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                                 <div className="flex items-start justify-between gap-3">
-                                    {/* KOLOM KIRI: JENIS PERMOHONAN */}
                                     <div className="flex-1 space-y-2 min-w-0">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
                                             Jenis Permohonan
@@ -174,10 +254,11 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                                     key={type.key}
                                                     type="button"
                                                     onClick={() => setSelectedType(type.key)}
-                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${selectedType === type.key
+                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${
+                                                        selectedType === type.key
                                                             ? 'bg-slate-100 text-slate-900 font-bold'
                                                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                                                        }`}
+                                                    }`}
                                                 >
                                                     <span className="truncate">{type.label}</span>
                                                     {selectedType === type.key && (
@@ -188,10 +269,8 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                         </div>
                                     </div>
 
-                                    {/* GARIS VERTIKAL PEMISAH */}
                                     <div className="w-px bg-slate-200/80 self-stretch my-1 shrink-0" />
 
-                                    {/* KOLOM KANAN: STATUS PERMOHONAN */}
                                     <div className="w-[190px] shrink-0 space-y-2">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
                                             Status Permohonan
@@ -202,10 +281,11 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                                     key={status.key}
                                                     type="button"
                                                     onClick={() => setSelectedStatus(status.key)}
-                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${selectedStatus === status.key
+                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${
+                                                        selectedStatus === status.key
                                                             ? 'bg-slate-100 text-slate-900 font-bold'
                                                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                                                        }`}
+                                                    }`}
                                                 >
                                                     <span className="truncate">{status.label}</span>
                                                     {selectedStatus === status.key && (
@@ -217,7 +297,6 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                     </div>
                                 </div>
 
-                                {/* FOOTER ACTION BAR */}
                                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
                                     <button
                                         type="button"
@@ -238,18 +317,17 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                     </div>
                 </div>
 
-                {/* Kanan: Toggle View Mode & Export CSV */}
                 <div className="flex items-center gap-2 justify-end">
-                    {/* View Mode Toggle Switcher */}
                     <div className="flex items-center p-1 bg-slate-100/80 rounded-sm border border-slate-200/60">
                         <button
                             type="button"
                             onClick={() => setViewMode('cards')}
-                            className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${viewMode === 'cards'
-                                ? 'bg-white text-slate-800 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                            title="Tampilan Kartu / Baris"
+                            className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${
+                                viewMode === 'cards'
+                                    ? 'bg-white text-slate-800 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                            title="Tampilan Kartu"
                         >
                             <LayoutList className="w-4 h-4" />
                         </button>
@@ -257,17 +335,17 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                         <button
                             type="button"
                             onClick={() => setViewMode('table')}
-                            className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${viewMode === 'table'
-                                ? 'bg-white text-slate-800 shadow-xs'
-                                : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                            className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${
+                                viewMode === 'table'
+                                    ? 'bg-white text-slate-800 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
                             title="Tampilan Tabel"
                         >
                             <TableIcon className="w-4 h-4" />
                         </button>
                     </div>
 
-                    {/* Export to CSV Button */}
                     <button
                         type="button"
                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold rounded-sm transition-all cursor-pointer"
@@ -278,9 +356,8 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                 </div>
             </div>
 
-            {/* ================= KONTEN DATA WORKSPACE ================= */}
+            {/* CONTENT DATA WORKSPACE */}
             {filteredApplications.length === 0 ? (
-                /* Empty State saat belum ada data / filter tidak cocok */
                 <div className="bg-white rounded-sm border border-slate-200/80 p-12 text-center space-y-3 shadow-xs">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
                         <FileText className="w-6 h-6" />
@@ -290,7 +367,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                     </h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
                         {hasActiveFilters
-                            ? 'Tidak ada data permohonan yang sesuai dengan filter yang dipilih. Coba atur ulang filter Anda.'
+                            ? 'Tidak ada data permohonan yang sesuai dengan filter yang dipilih.'
                             : 'Anda belum menginputkan permohonan apapun. Klik tombol di bawah untuk membuat permohonan baru.'}
                     </p>
                     {hasActiveFilters ? (
@@ -314,17 +391,16 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                     )}
                 </div>
             ) : viewMode === 'cards' ? (
-                /* ================= MODE 1: BARIS KARTU (RAPI & PRESISI SESUAI GAMBAR REFERENSI) ================= */
+                /* MODE KARTU */
                 <div className="space-y-3">
                     {filteredApplications.map((app) => {
-                        const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
-                        const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : (Array.isArray(app.complementaryData) ? app.complementaryData[0] : null);
-                        const appNumber = app.applicationId || app.applicationNumber || '-';
-                        const applicantName = app.taxSubject?.name || firstReq?.taxSubjectData?.name || `Permohonan #${appNumber}`;
-                        const landArea = app.taxObject?.landArea ?? firstReq?.taxObjectData?.landArea ?? 120;
-                        const buildingArea = app.taxObject?.buildingArea ?? firstReq?.taxObjectData?.buildingArea ?? 45;
-                        const rawNop = app.taxObject?.nop || app.taxObject?.nopTemporary || firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
-                        const formattedNop = formatNop(rawNop);
+                        const appNumber = app.applicationId || '-';
+                        const applicantName = app.taxSubject?.name || `Permohonan #${appNumber}`;
+                        const landArea = app.taxObject?.landArea ?? '-';
+                        const buildingArea = app.taxObject?.buildingArea ?? '-';
+                        const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : null;
+                        const rawNop = app.requestedNop || app.taxObject?.nop || firstComp?.taxObjectData?.nop || '';
+                        const formattedNop = rawNop ? formatNopInput(rawNop) : '-';
 
                         const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
                             code: app.applicationType,
@@ -333,59 +409,70 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                         };
                         const isEditable = app.status === 'SUBMITTED' || app.status === 'REVISION';
 
-                        const startDateParts = getDateParts(app.serviceNumberDate);
-                        const endDateParts = getDateParts(app.completionDate || new Date(Date.now() + 7 * 86400000));
+                        const sgCreatedParts = app.smartgovCreatedAt ? getDateParts(app.smartgovCreatedAt) : null;
+                        const sgCompletedParts = app.smartgovCompletedAt ? getDateParts(app.smartgovCompletedAt) : null;
 
                         return (
                             <div
                                 key={app.id}
-                                className="bg-white rounded-sm border border-slate-200/80 p-4 py-2 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6"
+                                className="bg-white rounded-sm border border-slate-200/80 p-4 py-3 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6"
                             >
-                                {/* 1. Nama Pemohon & Luas Bangunan / Luas Tanah */}
-                                <div className="space-y-1 min-w-[160px]">
-                                    <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+                                <div className="space-y-1 min-w-[170px]">
+                                    <h3 className="text-xs font-bold text-slate-900 tracking-tight">
                                         {applicantName}
                                     </h3>
-
                                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                                         <span className="flex items-center gap-1" title="Luas Tanah">
-                                            <span className="text-slate-400 font-semibold">LT:</span>
-                                            {landArea} m²
+                                            <span className="text-slate-400 font-semibold">LT:</span> {landArea} m²
                                         </span>
                                         <span className="text-slate-300">•</span>
                                         <span className="flex items-center gap-1" title="Luas Bangunan">
-                                            <span className="text-slate-400 font-semibold">LB:</span>
-                                            {buildingArea} m²
+                                            <span className="text-slate-400 font-semibold">LB:</span> {buildingArea} m²
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* 2. Kolom NOP Objek Pajak */}
                                 <div>
-                                    <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs tracking-tight bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-sm inline-block">
+                                    <span className="inline-flex items-center gap-1 font-mono font-bold text-slate-800 text-xs tracking-tight bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-sm">
                                         {formattedNop}
                                     </span>
                                 </div>
 
-                                {/* 3. Badge Jenis Permohonan */}
                                 <div>
                                     <span
                                         title={typeInfo.title}
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-sm text-xs font-bold border ${typeInfo.badgeStyle}`}
+                                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm text-xs font-bold border ${typeInfo.badgeStyle}`}
                                     >
                                         {typeInfo.code}
                                     </span>
                                 </div>
 
-                                {/* 3. Flight Timeline (Tanggal Susun Vertikal: 12 Nov -> 20 Nov) */}
-                                <div className="flex items-center gap-3 text-xs">
+                                <div className="flex items-center gap-2 text-xs">
                                     <div className="text-center">
-                                        <span className="block font-bold text-slate-800 text-xs leading-none">
-                                            {startDateParts.day}
-                                        </span>
-                                        <span className="block text-[10px] text-slate-400 font-medium mt-0.5">
-                                            {startDateParts.month}
-                                        </span>
+                                        <span className="block text-[10px] text-slate-400 font-medium mb-0.5">SmartGov ID</span>
+                                        {renderSmartgovIdPill(app.smartgovId)}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 text-xs">
+                                    <div className="text-center min-w-[36px]">
+                                        {sgCreatedParts ? (
+                                            <>
+                                                <span className="block font-bold text-slate-800 text-xs leading-none">
+                                                    {sgCreatedParts.day}
+                                                </span>
+                                                <span className="block text-[10px] text-slate-400 font-medium mt-0.5">
+                                                    {sgCreatedParts.month}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span title="Tanggal dibuat SmartGov belum diisi" className="block">
+                                                    <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                                                </span>
+                                                <span className="block text-[10px] text-slate-400 font-medium mt-0.5">Dibuat</span>
+                                            </>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-1 text-slate-300 font-medium">
@@ -394,28 +481,38 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                         <span className="w-2 h-px bg-slate-300" />
                                     </div>
 
-                                    <div className="text-center">
-                                        <span className="block font-bold text-slate-800 text-xs leading-none">
-                                            {endDateParts.day}
-                                        </span>
-                                        <span className="block text-[10px] text-slate-400 font-medium mt-0.5">
-                                            {endDateParts.month}
-                                        </span>
+                                    <div className="text-center min-w-[36px]">
+                                        {sgCompletedParts ? (
+                                            <>
+                                                <span className="block font-bold text-slate-800 text-xs leading-none">
+                                                    {sgCompletedParts.day}
+                                                </span>
+                                                <span className="block text-[10px] text-slate-400 font-medium mt-0.5">
+                                                    {sgCompletedParts.month}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span title="Tanggal selesai SmartGov belum diisi" className="block">
+                                                    <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                                                </span>
+                                                <span className="block text-[10px] text-slate-400 font-medium mt-0.5">Selesai</span>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* GARIS VERTIKAL 1 */}
                                 <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
 
-                                {/* 4. STATUS Indicator */}
                                 <div>
                                     <span
-                                        className={`inline-flex items-center gap-1 font-bold text-xs ${app.status === 'SUBMITTED'
-                                            ? 'text-sky-600'
-                                            : app.status === 'REVISION'
+                                        className={`inline-flex items-center gap-1 font-bold text-xs ${
+                                            app.status === 'SUBMITTED'
+                                                ? 'text-sky-600'
+                                                : app.status === 'REVISION'
                                                 ? 'text-amber-600'
                                                 : 'text-slate-600'
-                                            }`}
+                                        }`}
                                     >
                                         {app.status === 'SUBMITTED' ? (
                                             <Clock className="w-3.5 h-3.5 text-sky-500" />
@@ -426,98 +523,50 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                     </span>
                                 </div>
 
-                                {/* GARIS VERTIKAL 2 */}
                                 <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
 
-                                {/* 5. No. Pelayanan & Tombol Aksi (Titik 3 Edit) */}
                                 <div className="flex items-center gap-4 justify-end w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                                     <div>
                                         <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs">
-                                            #{app.applicationId || app.applicationNumber}
+                                            #{app.applicationId}
                                         </span>
                                     </div>
 
-                                    {isEditable ? (
-                                        <Link
-                                            href={`/dashboard/applications/${app.id}/edit`}
-                                            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
-                                            title="Edit permohonan"
-                                        >
-                                            <MoreVertical className="w-4 h-4" />
-                                        </Link>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            disabled
-                                            className="p-1.5 text-slate-300 cursor-not-allowed"
-                                            title="Permohonan terkunci"
-                                        >
-                                            <MoreVertical className="w-4 h-4" />
-                                        </button>
-                                    )}
+                                    {renderActionDropdown(app)}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
             ) : (
-                /* ================= MODE 2: TABEL RINGKAS (TABLE VIEW RAPI, SHARP & PRESISI) ================= */
+                /* MODE TABEL */
                 <div className="bg-white rounded-sm border border-slate-200/80 shadow-xs overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50/80 text-[11.5px] font-bold text-slate-600 border-b border-slate-200/80">
-                                    <th className="relative py-3 px-3.5 whitespace-nowrap text-center w-10">
-                                        <span>No.</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>No. Permohonan</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Nama Pemohon</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Nomor Objek Pajak</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Jenis Permohonan</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Luas (LT / LB)</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Status</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Tgl Masuk</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="relative py-3 px-4 whitespace-nowrap">
-                                        <span>Tgl Selesai</span>
-                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
-                                    </th>
-                                    <th className="py-3 px-4 whitespace-nowrap text-center">
-                                        <span>Aksi</span>
-                                    </th>
+                                <tr className="bg-slate-50/80 text-[11px] font-bold text-slate-600 border-b border-slate-200/80">
+                                    <th className="py-2.5 px-3 whitespace-nowrap text-center w-10">No.</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">No. Permohonan</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">SmartGov ID</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">Nama Pemohon</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">NOP Objek</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">Jenis</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">Luas (LT/LB)</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">Status</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">SG Dibuat</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap">SG Selesai</th>
+                                    <th className="py-2.5 px-3.5 whitespace-nowrap text-center">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                                 {filteredApplications.map((app, index) => {
-                                    const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
-                                    const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : (Array.isArray(app.complementaryData) ? app.complementaryData[0] : null);
-                                    const appNumber = app.applicationId || app.applicationNumber || '-';
-                                    const applicantName = app.taxSubject?.name || firstReq?.taxSubjectData?.name || `Permohonan #${appNumber}`;
-                                    const landArea = app.taxObject?.landArea ?? firstReq?.taxObjectData?.landArea ?? 120;
-                                    const buildingArea = app.taxObject?.buildingArea ?? firstReq?.taxObjectData?.buildingArea ?? 45;
-                                    const rawNop = app.taxObject?.nop || app.taxObject?.nopTemporary || firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
-                                    const formattedNop = formatNop(rawNop);
+                                    const appNumber = app.applicationId || '-';
+                                    const applicantName = app.taxSubject?.name || `Permohonan #${appNumber}`;
+                                    const landArea = app.taxObject?.landArea ?? '-';
+                                    const buildingArea = app.taxObject?.buildingArea ?? '-';
+                                    const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : null;
+                                    const rawNop = app.requestedNop || app.taxObject?.nop || firstComp?.taxObjectData?.nop || '';
+                                    const formattedNop = rawNop ? formatNopInput(rawNop) : '-';
 
                                     const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
                                         code: app.applicationType,
@@ -528,54 +577,50 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
 
                                     return (
                                         <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
-                                            {/* 0. Nomor Urut */}
-                                            <td className="py-3 px-3.5 whitespace-nowrap text-center font-semibold text-slate-400 text-xs">
+                                            <td className="py-2.5 px-3 whitespace-nowrap text-center font-medium text-slate-400 text-xs">
                                                 {index + 1}
                                             </td>
 
-                                            {/* 1. No. Pelayanan */}
-                                            <td className="py-3 px-4 whitespace-nowrap font-bold text-slate-800 text-xs">
-                                                #{app.applicationId || app.applicationNumber}
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap font-bold text-slate-800 text-xs">
+                                                #{app.applicationId}
                                             </td>
 
-                                            {/* 2. Nama Pemohon */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-sm font-bold text-slate-900 tracking-tight">
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap">
+                                                {renderSmartgovIdPill(app.smartgovId)}
+                                            </td>
+
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap font-bold text-slate-900 text-xs tracking-tight">
                                                 {applicantName}
                                             </td>
 
-                                            {/* 3. NOP Objek */}
-                                            <td className="py-3 px-4 whitespace-nowrap">
-                                                <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs tracking-tight inline-block">
-                                                    {formattedNop}
-                                                </span>
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">
+                                                {formattedNop}
                                             </td>
 
-                                            {/* 4. Jenis Permohonan */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap">
                                                 <span
                                                     title={typeInfo.title}
-                                                    className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200/80"
+                                                    className="inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200/80"
                                                 >
                                                     {typeInfo.code}
                                                 </span>
                                             </td>
 
-                                            {/* 5. Luas (LT / LB) */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-[11px] text-slate-500 font-medium">
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap text-[11px] text-slate-500 font-medium">
                                                 <span title="Luas Tanah"><span className="text-slate-400 font-semibold">LT:</span> {landArea} m²</span>
                                                 <span className="text-slate-300 mx-1.5">•</span>
                                                 <span title="Luas Bangunan"><span className="text-slate-400 font-semibold">LB:</span> {buildingArea} m²</span>
                                             </td>
 
-                                            {/* 6. Status */}
-                                            <td className="py-3 px-4 whitespace-nowrap">
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap">
                                                 <span
-                                                    className={`inline-flex items-center gap-1 font-bold text-xs ${app.status === 'SUBMITTED'
-                                                        ? 'text-sky-600'
-                                                        : app.status === 'REVISION'
+                                                    className={`inline-flex items-center gap-1 font-bold text-xs ${
+                                                        app.status === 'SUBMITTED'
+                                                            ? 'text-sky-600'
+                                                            : app.status === 'REVISION'
                                                             ? 'text-amber-600'
                                                             : 'text-slate-600'
-                                                        }`}
+                                                    }`}
                                                 >
                                                     {app.status === 'SUBMITTED' ? (
                                                         <Clock className="w-3.5 h-3.5 text-sky-500" />
@@ -586,36 +631,16 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                                 </span>
                                             </td>
 
-                                            {/* 7. Tgl Masuk */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-600 font-medium">
-                                                {formatDateShort(app.serviceNumberDate)}
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap text-xs text-slate-600">
+                                                {renderSmartgovDate(app.smartgovCreatedAt)}
                                             </td>
 
-                                            {/* 8. Tgl Selesai */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-600 font-medium">
-                                                {formatDateShort(app.completionDate || new Date(Date.now() + 7 * 86400000))}
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap text-xs text-slate-600">
+                                                {renderSmartgovDate(app.smartgovCompletedAt)}
                                             </td>
 
-                                            {/* 9. Aksi (Titik 3) */}
-                                            <td className="py-3 px-4 whitespace-nowrap text-center">
-                                                {isEditable ? (
-                                                    <Link
-                                                        href={`/dashboard/applications/${app.id}/edit`}
-                                                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-colors inline-block cursor-pointer"
-                                                        title="Edit permohonan"
-                                                    >
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </Link>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        disabled
-                                                        className="p-1.5 text-slate-300 cursor-not-allowed inline-block"
-                                                        title="Permohonan terkunci"
-                                                    >
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </button>
-                                                )}
+                                            <td className="py-2.5 px-3.5 whitespace-nowrap text-center">
+                                                {renderActionDropdown(app)}
                                             </td>
                                         </tr>
                                     );

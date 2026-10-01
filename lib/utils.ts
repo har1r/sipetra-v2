@@ -76,3 +76,21 @@ export function capitalize(str: string): string {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
+
+/**
+ * Format a raw NOP string into standard 18-digit PBB format:
+ * XX.XX.XXX.XXX.XXX.XXXX-X (e.g. 36.19.150.008.009.0867-0)
+ */
+export function formatNopInput(value: string): string {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '').slice(0, 18);
+  if (!digits) return '';
+  let res = digits.slice(0, 2);
+  if (digits.length > 2) res += '.' + digits.slice(2, 4);
+  if (digits.length > 4) res += '.' + digits.slice(4, 7);
+  if (digits.length > 7) res += '.' + digits.slice(7, 10);
+  if (digits.length > 10) res += '.' + digits.slice(10, 13);
+  if (digits.length > 13) res += '.' + digits.slice(13, 17);
+  if (digits.length > 17) res += '-' + digits.slice(17, 18);
+  return res;
+}

@@ -8,9 +8,10 @@ interface TaxSubjectFormProps {
     register: UseFormRegister<any>;
     errors: FieldErrors<any>;
     title?: string;
-    description?: string;
     isCorrection?: boolean;
     isRequestedData?: boolean;
+    isNewOrReactivation?: boolean;
+    isFirstSection?: boolean;
 }
 
 export function TaxSubjectForm({
@@ -18,9 +19,9 @@ export function TaxSubjectForm({
     register,
     errors,
     title = 'Informasi Subjek Pajak',
-    description = 'Permohonan dengan jenis selain Pembetulan, maka alamat, Blok, RT, RW, Kecamatan, Kelurahan / Desa subjek pajak boleh tidak diisi.',
-    isCorrection = false,
     isRequestedData = true,
+    isNewOrReactivation = false,
+    isFirstSection = false,
 }: TaxSubjectFormProps) {
     const getFieldError = (fieldName: string) => {
         const errorObj = get(errors, `${prefix}.${fieldName}`);
@@ -36,28 +37,24 @@ export function TaxSubjectForm({
     const subdistrictErr = getFieldError('subdistrict');
     const villageErr = getFieldError('village');
 
-    const isAddressRequired = isRequestedData || isCorrection;
-    const isBlockRtRwRequired = isCorrection;
+    const isNameRequired = isRequestedData || !isNewOrReactivation;
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
-            <div className="lg:col-span-4 space-y-1">
-                <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
-                {isCorrection && (
-                    <div className="mt-2">
-                        <span className="inline-block px-2 py-0.5 rounded-sm bg-amber-50 text-amber-700 text-xs font-medium border border-amber-200">
-                            Wajib diisi lengkap untuk Pembetulan
-                        </span>
-                    </div>
-                )}
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 ${isFirstSection ? '' : 'border-t border-slate-200'}`}>
+            <div className="lg:col-span-4">
+                <h3 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h3>
             </div>
 
             <div className="lg:col-span-8 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Nama Wajib Pajak <span className="text-rose-500">*</span>
+                            Nama Wajib Pajak{' '}
+                            {isNameRequired ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <input
                             type="text"
@@ -73,7 +70,12 @@ export function TaxSubjectForm({
 
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Nomor WhatsApp <span className="text-rose-500">{isRequestedData ? '*' : '(Opsional)'}</span>
+                            Nomor WhatsApp{' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <div className="flex rounded-sm border border-slate-200 overflow-hidden bg-slate-50 focus-within:bg-white focus-within:border-[#00a389]">
                             <span className="inline-flex items-center px-3 bg-slate-100 text-slate-600 text-xs font-semibold border-r border-slate-200">
@@ -94,7 +96,12 @@ export function TaxSubjectForm({
 
                 <div>
                     <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                        Alamat Wajib Pajak <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                        Alamat Wajib Pajak{' '}
+                        {isRequestedData ? (
+                            <span className="text-rose-500">*</span>
+                        ) : (
+                            <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                        )}
                     </label>
                     <textarea
                         rows={2}
@@ -111,7 +118,7 @@ export function TaxSubjectForm({
                 <div className="grid grid-cols-3 gap-3">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Blok <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            Blok <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -126,7 +133,7 @@ export function TaxSubjectForm({
                     </div>
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            RT <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            RT <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -141,7 +148,7 @@ export function TaxSubjectForm({
                     </div>
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            RW <span className="text-rose-500">{isBlockRtRwRequired ? '*' : '(Opsional)'}</span>
+                            RW <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <input
                             type="text"
@@ -159,7 +166,12 @@ export function TaxSubjectForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Kecamatan <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                            Kecamatan{' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <input
                             type="text"
@@ -175,7 +187,12 @@ export function TaxSubjectForm({
 
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Kelurahan / Desa <span className="text-rose-500">{isAddressRequired ? '*' : '(Opsional)'}</span>
+                            Kelurahan / Desa{' '}
+                            {isRequestedData ? (
+                                <span className="text-rose-500">*</span>
+                            ) : (
+                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
+                            )}
                         </label>
                         <input
                             type="text"

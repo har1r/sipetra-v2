@@ -16,7 +16,7 @@ interface EditApplicationPageProps {
     params: Promise<{ id: string }>;
 }
 
-export default async function EditApplicationPage({ params }: EditApplicationPageProps) {
+export default async function EditFrontOfficerApplicationPage({ params }: EditApplicationPageProps) {
     const session = await getServerSession(authOptions);
 
     if (!session) {
@@ -45,7 +45,6 @@ export default async function EditApplicationPage({ params }: EditApplicationPag
 
     const appData = res.data;
 
-    // Converted database model to form input structure
     const initialData = {
         id: appData.id,
         applicationType: appData.applicationType,

@@ -70,6 +70,7 @@ enum AuditAction {
   NOTIFY_WP
   EXPIRE
   SLA_RECALCULATED
+  DUPLICATE
 }
 
 model User {
@@ -93,8 +94,8 @@ model Application {
   applicationId       String              @unique
   applicationType     ApplicationType
 
-  smartgovId          String
-  smartgovCreatedAt   DateTime            @default(now())
+  smartgovId          String?
+  smartgovCreatedAt   DateTime?
   smartgovCompletedAt DateTime?
 
   complementary       ComplementaryData[]
@@ -102,6 +103,7 @@ model Application {
   taxObject           TaxObjectData
 
   status              ApplicationStatus   @default(SUBMITTED)
+  requestedNop        String?             @default("")
   submissionChannel   SubmissionChannel   @default(FRONT_OFFICER)
   isFavorite          Boolean             @default(false)
 
@@ -192,7 +194,6 @@ type TaxSubjectData {
 
 type TaxObjectData {
   nop              String?
-  nopTemporary     String?
   address          String?
   block            String?
   neighborhoodUnit String?

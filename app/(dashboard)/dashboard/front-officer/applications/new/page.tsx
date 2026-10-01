@@ -4,11 +4,11 @@ import { redirect } from 'next/navigation';
 import { ApplicationForm } from '@/features/front-officer/components/ApplicationForm';
 
 export const metadata = {
-    title: 'Input Permohonan Baru — SIPETRA Architax',
+    title: 'Input Permohonan Baru Front Officer — SIPETRA Architax',
     description: 'Formulir pendaftaran permohonan pajak daerah baru.',
 };
 
-export default async function NewApplicationPage() {
+export default async function NewFrontOfficerApplicationPage() {
     const session = await getServerSession(authOptions);
 
     if (!session) {
