@@ -8,6 +8,10 @@ interface DashboardContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
+
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
 
@@ -39,12 +43,42 @@ const DashboardContext = createContext<DashboardContextType | undefined>(undefin
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPersonalProfileDrawerOpen, setIsPersonalProfileDrawerOpen] = useState(false);
   const [sidebarStatsTrigger, setSidebarStatsTrigger] = useState(0);
   const [favoriteApplications, setFavoritePermohonans] = useState<any[]>([]);
   const [globalSelectedRequest, setGlobalSelectedRequest] = useState<any | null>(null);
   const [duplicatedApplicationData, setDuplicatedApplicationData] = useState<any | null>(null);
+
+  // Sync isSidebarCollapsed with localStorage on mount (hydration safe)
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sipetra_sidebar_collapsed');
+      if (saved !== null) {
+        setIsSidebarCollapsed(saved === 'true');
+      }
+    } catch (e) {
+      // Ignore localStorage access errors if blocked
+    }
+  }, []);
+
+  const handleSetSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setIsSidebarCollapsed(collapsed);
+    try {
+      localStorage.setItem('sipetra_sidebar_collapsed', String(collapsed));
+    } catch (e) {}
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sipetra_sidebar_collapsed', String(next));
+      } catch (e) {}
+      return next;
+    });
+  }, []);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -97,6 +131,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const contextValue = useMemo(() => ({
     searchQuery,
     setSearchQuery,
+    isSidebarCollapsed,
+    setIsSidebarCollapsed: handleSetSidebarCollapsed,
+    toggleSidebar,
     isMobileMenuOpen,
     setIsMobileMenuOpen,
     isPersonalProfileDrawerOpen,
@@ -111,7 +148,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setDuplicatedApplicationData,
     showConfirm,
   }), [
-    searchQuery, isMobileMenuOpen, isPersonalProfileDrawerOpen,
+    searchQuery, isSidebarCollapsed, handleSetSidebarCollapsed, toggleSidebar,
+    isMobileMenuOpen, isPersonalProfileDrawerOpen,
     sidebarStatsTrigger, triggerRefreshSidebarStats,
     favoriteApplications, refreshFavorites,
     globalSelectedRequest, duplicatedApplicationData,

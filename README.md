@@ -6,8 +6,7 @@ Listed directory ui
 Listed directory shared
 Listed directory features
 Listed directory data-entry
-Listed directory components
-Listed directory tasks
+Listed directory data-entry
 Listed directory components
 Listed directory lib
 Listed directory %28dashboard%29
@@ -16,7 +15,6 @@ Viewed Sidebar.tsx:70-140
 Viewed Sidebar.tsx:141-235
 Viewed Sidebar.tsx:236-386
 Viewed DashboardContext.tsx:1-100
-Viewed TasksPage.tsx:1-16
 Listed directory home
 Viewed page.tsx:1-11
 Viewed HomePage.tsx:1-18
@@ -94,7 +92,7 @@ features/data-entry/
   5. Tombol aksi: Simpan Draf, Ajukan Permohonan (`submitApplication`), atau Perbarui Permohonan (`editApplication`).
 
 #### Tahap 5: Integrasi Halaman Workspace & Feedback
-- Menghubungkan form ke workspace di [app/(dashboard)/dashboard/tasks/page.tsx](file:///c:/Users/AIO%20SAKA/Desktop/sipetra_v2/app/%28dashboard%29/dashboard/tasks/page.tsx) (atau route baru `/dashboard/applications/new` dan `/dashboard/applications/[id]/edit`).
+- Menghubungkan form ke workspace di [app/(dashboard)/dashboard/workflow/pengajuan/page.tsx](file:///c:/Users/Pavilion/Desktop/sipetra-v2/app/%28dashboard%29/dashboard/workflow/pengajuan/page.tsx) (atau route baru `/dashboard/applications/new` dan `/dashboard/applications/[id]/edit`).
 - Menggunakan komponen [NotificationSystem.tsx](file:///c:/Users/AIO%20SAKA/Desktop/sipetra_v2/components/shared/NotificationSystem.tsx) dan dialog konfirmasi yang sudah ada di [DashboardContext.tsx](file:///c:/Users/AIO%20SAKA/Desktop/sipetra_v2/context/DashboardContext.tsx) untuk feedback sukses/gagal.
 
 ---

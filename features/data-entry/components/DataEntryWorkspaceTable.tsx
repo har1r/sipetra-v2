@@ -11,14 +11,10 @@ import {
     LayoutList,
     Table as TableIcon,
     Download,
-    CheckCircle2,
     Clock,
     AlertCircle,
-    Edit3,
     MoreVertical,
     FileText,
-    Home,
-    MapPin,
     Plus,
 } from 'lucide-react';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '../schemas/application.schema';
@@ -41,6 +37,39 @@ interface DataEntryWorkspaceTableProps {
 
 export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTableProps) {
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+    const [selectedType, setSelectedType] = useState<string>('ALL');
+    const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+    const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+
+    // Filter Options
+    const typeOptions = [
+        { key: 'ALL', label: 'Semua Jenis' },
+        { key: 'PARTIAL_MUTATION', label: 'Mutasi Sebagian' },
+        { key: 'EXPIRED_UPDATE', label: 'Mutasi Habis Update' },
+        { key: 'EXPIRED_REGULAR', label: 'Mutasi Habis Reguler' },
+        { key: 'NEW_TAX_OBJECT', label: 'Objek Pajak Baru' },
+        { key: 'CORRECTION', label: 'Pembetulan' },
+        { key: 'REACTIVATION', label: 'Pengaktifan' },
+        { key: 'MERGER_MUTATION', label: 'Mutasi Penggabungan' },
+        { key: 'MERGER_AND_PARTIAL_MUTATION', label: 'Mutasi Penggabungan & Pemecahan' },
+    ];
+
+    const statusOptions = [
+        { key: 'ALL', label: 'Semua Status' },
+        { key: 'SUBMITTED', label: 'Submitted (Diajukan)' },
+        { key: 'REVISION', label: 'Revision (Perbaikan)' },
+        { key: 'APPROVED', label: 'Approved (Disetujui)' },
+        { key: 'REJECTED', label: 'Rejected (Ditolak)' },
+    ];
+
+    // Filtered Applications
+    const filteredApplications = React.useMemo(() => {
+        return applications.filter((app) => {
+            const matchType = selectedType === 'ALL' || app.applicationType === selectedType;
+            const matchStatus = selectedStatus === 'ALL' || app.status === selectedStatus;
+            return matchType && matchStatus;
+        });
+    }, [applications, selectedType, selectedStatus]);
 
     // Helper format tanggal singkat (Contoh: 12 Nov)
     const formatDateShort = (dateVal: Date | string | null | undefined) => {
@@ -59,6 +88,19 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
         };
     };
 
+    // Helper format NOP 18 Digit (Contoh: 36.19.150.008.009-0981.0)
+    const formatNop = (rawNop?: string) => {
+        if (!rawNop) return '36.19.150.008.009-0981.0';
+        const digits = rawNop.replace(/\D/g, '');
+        if (digits.length < 18) {
+            const padded = (digits || '361915000800909810').padEnd(18, '0').slice(0, 18);
+            return `${padded.slice(0, 2)}.${padded.slice(2, 4)}.${padded.slice(4, 7)}.${padded.slice(7, 10)}.${padded.slice(10, 13)}-${padded.slice(13, 17)}.${padded.slice(17, 18)}`;
+        }
+        return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 7)}.${digits.slice(7, 10)}.${digits.slice(10, 13)}-${digits.slice(13, 17)}.${digits.slice(17, 18)}`;
+    };
+
+    const hasActiveFilters = selectedType !== 'ALL' || selectedStatus !== 'ALL';
+
     return (
         <div className="space-y-4">
             {/* ================= TOP TOOLBAR CONTROL BAR ================= */}
@@ -68,7 +110,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                     {/* Search Trigger Button */}
                     <button
                         type="button"
-                        className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-500 rounded-lg transition-all cursor-pointer"
+                        className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-500 rounded-sm transition-all cursor-pointer"
                         title="Cari permohonan"
                     >
                         <Search className="w-4 h-4" />
@@ -76,7 +118,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
 
                     {/* Month-Year Navigator Pill */}
                     <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-sm px-2 py-1 text-xs font-semibold text-slate-700 gap-1">
-                        <button type="button" className="p-1 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer">
+                        <button type="button" className="p-1 hover:bg-slate-200/60 rounded-sm transition-colors cursor-pointer">
                             <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
 
@@ -90,14 +132,104 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                         </button>
                     </div>
 
-                    {/* More Filters Button */}
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold rounded-sm transition-all cursor-pointer"
+                    {/* More Filters Hover Popover Container */}
+                    <div
+                        className="relative"
+                        onMouseEnter={() => setIsFilterOpen(true)}
+                        onMouseLeave={() => setIsFilterOpen(false)}
                     >
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-                        More Filters
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 border text-xs font-semibold rounded-sm transition-all cursor-pointer ${hasActiveFilters || isFilterOpen
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700'
+                                }`}
+                        >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>More Filters</span>
+                            {hasActiveFilters && (
+                                <span className="w-2 h-2 rounded-full bg-[#00a389] shrink-0" />
+                            )}
+                        </button>
+
+                        {/* FLYOUT FILTER POPOVER CARD */}
+                        {isFilterOpen && (
+                            <div className="absolute left-0 top-full mt-1.5 w-[540px] bg-white border border-slate-200/90 rounded-sm shadow-xl p-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150 before:absolute before:-top-2 before:left-0 before:right-0 before:h-2">
+                                <div className="flex items-start justify-between gap-3">
+                                    {/* KOLOM KIRI: JENIS PERMOHONAN */}
+                                    <div className="flex-1 space-y-2 min-w-0">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
+                                            Jenis Permohonan
+                                        </div>
+                                        <div className="flex flex-col gap-0.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-none">
+                                            {typeOptions.map((type) => (
+                                                <button
+                                                    key={type.key}
+                                                    type="button"
+                                                    onClick={() => setSelectedType(type.key)}
+                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${selectedType === type.key
+                                                            ? 'bg-slate-100 text-slate-900 font-bold'
+                                                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                >
+                                                    <span className="truncate">{type.label}</span>
+                                                    {selectedType === type.key && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[#00a389] shrink-0 ml-2" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* GARIS VERTIKAL PEMISAH */}
+                                    <div className="w-px bg-slate-200/80 self-stretch my-1 shrink-0" />
+
+                                    {/* KOLOM KANAN: STATUS PERMOHONAN */}
+                                    <div className="w-[190px] shrink-0 space-y-2">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
+                                            Status Permohonan
+                                        </div>
+                                        <div className="flex flex-col gap-0.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-none">
+                                            {statusOptions.map((status) => (
+                                                <button
+                                                    key={status.key}
+                                                    type="button"
+                                                    onClick={() => setSelectedStatus(status.key)}
+                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${selectedStatus === status.key
+                                                            ? 'bg-slate-100 text-slate-900 font-bold'
+                                                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                >
+                                                    <span className="truncate">{status.label}</span>
+                                                    {selectedStatus === status.key && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[#00a389] shrink-0 ml-2" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* FOOTER ACTION BAR */}
+                                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedType('ALL');
+                                            setSelectedStatus('ALL');
+                                        }}
+                                        className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                                    >
+                                        Reset Filter
+                                    </button>
+                                    <span className="text-[11px] font-medium text-slate-400">
+                                        {filteredApplications.length} permohonan
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Kanan: Toggle View Mode & Export CSV */}
@@ -119,7 +251,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                         <button
                             type="button"
                             onClick={() => setViewMode('table')}
-                            className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${viewMode === 'table'
+                            className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${viewMode === 'table'
                                 ? 'bg-white text-slate-800 shadow-xs'
                                 : 'text-slate-500 hover:text-slate-700'
                                 }`}
@@ -141,37 +273,58 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
             </div>
 
             {/* ================= KONTEN DATA WORKSPACE ================= */}
-            {applications.length === 0 ? (
-                /* Empty State saat belum ada data */
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center space-y-3 shadow-xs">
+            {filteredApplications.length === 0 ? (
+                /* Empty State saat belum ada data / filter tidak cocok */
+                <div className="bg-white rounded-sm border border-slate-200/80 p-12 text-center space-y-3 shadow-xs">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
                         <FileText className="w-6 h-6" />
                     </div>
-                    <h3 className="text-sm font-bold text-slate-700">Belum Ada Permohonan</h3>
+                    <h3 className="text-sm font-bold text-slate-700">
+                        {hasActiveFilters ? 'Tidak Ada Permohonan Ditemukan' : 'Belum Ada Permohonan'}
+                    </h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                        Anda belum menginputkan permohonan apapun. Klik tombol di bawah untuk membuat permohonan baru.
+                        {hasActiveFilters
+                            ? 'Tidak ada data permohonan yang sesuai dengan filter yang dipilih. Coba atur ulang filter Anda.'
+                            : 'Anda belum menginputkan permohonan apapun. Klik tombol di bawah untuk membuat permohonan baru.'}
                     </p>
-                    <Link
-                        href="/dashboard/applications/new"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a389] hover:bg-[#008670] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs"
-                    >
-                        <Plus className="w-3.5 h-3.5" /> Buat Permohonan Baru
-                    </Link>
+                    {hasActiveFilters ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedType('ALL');
+                                setSelectedStatus('ALL');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-sm transition-colors shadow-xs cursor-pointer"
+                        >
+                            Reset Filter
+                        </button>
+                    ) : (
+                        <Link
+                            href="/dashboard/applications/new"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a389] hover:bg-[#008670] text-white text-xs font-semibold rounded-sm transition-colors shadow-xs"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Buat Permohonan Baru
+                        </Link>
+                    )}
                 </div>
             ) : viewMode === 'cards' ? (
                 /* ================= MODE 1: BARIS KARTU (RAPI & PRESISI SESUAI GAMBAR REFERENSI) ================= */
                 <div className="space-y-3">
-                    {applications.map((app) => {
+                    {filteredApplications.map((app) => {
                         const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
+                        const firstComp = Array.isArray(app.complementaryData) ? app.complementaryData[0] : null;
                         const applicantName = firstReq?.taxSubjectData?.name || `Permohonan #${app.applicationNumber}`;
-                        const villageName = firstReq?.taxSubjectData?.village || firstReq?.taxObjectData?.village || 'Sukamaju';
+                        const landArea = firstReq?.taxObjectData?.landArea ?? 120;
+                        const buildingArea = firstReq?.taxObjectData?.buildingArea ?? 45;
+                        const rawNop = firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
+                        const formattedNop = formatNop(rawNop);
+
                         const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
                             code: app.applicationType,
                             title: app.applicationType,
                             badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
                         };
                         const isEditable = app.status === 'SUBMITTED' || app.status === 'REVISION';
-                        const reqCount = Array.isArray(app.requestedData) ? app.requestedData.length : 1;
 
                         const startDateParts = getDateParts(app.serviceNumberDate);
                         const endDateParts = getDateParts(app.completionDate || new Date(Date.now() + 7 * 86400000));
@@ -181,25 +334,33 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                 key={app.id}
                                 className="bg-white rounded-sm border border-slate-200/80 p-4 py-2 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6"
                             >
-                                {/* 1. Nama Pemohon & Sub-icons */}
-                                <div className="space-y-1 min-w-[180px]">
+                                {/* 1. Nama Pemohon & Luas Bangunan / Luas Tanah */}
+                                <div className="space-y-1 min-w-[160px]">
                                     <h3 className="text-sm font-bold text-slate-900 tracking-tight">
                                         {applicantName}
                                     </h3>
 
-                                    <div className="flex items-center gap-2.5 text-[11px] text-slate-500 font-medium">
-                                        <span className="flex items-center gap-1" title="Jumlah Objek Dimohon">
-                                            <Home className="w-3 h-3 text-slate-400" />
-                                            {reqCount} Objek
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                                        <span className="flex items-center gap-1" title="Luas Tanah">
+                                            <span className="text-slate-400 font-semibold">LT:</span>
+                                            {landArea} m²
                                         </span>
-                                        <span className="flex items-center gap-1" title="Lokasi Desa / Kelurahan">
-                                            <MapPin className="w-3 h-3 text-slate-400" />
-                                            {villageName}
+                                        <span className="text-slate-300">•</span>
+                                        <span className="flex items-center gap-1" title="Luas Bangunan">
+                                            <span className="text-slate-400 font-semibold">LB:</span>
+                                            {buildingArea} m²
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* 2. Badge Jenis Permohonan (Pill Mini) */}
+                                {/* 2. Kolom NOP Objek Pajak */}
+                                <div>
+                                    <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs tracking-tight bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-sm inline-block">
+                                        {formattedNop}
+                                    </span>
+                                </div>
+
+                                {/* 3. Badge Jenis Permohonan */}
                                 <div>
                                     <span
                                         title={typeInfo.title}
@@ -239,75 +400,32 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                 {/* GARIS VERTIKAL 1 */}
                                 <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
 
-                                {/* 4. ACTIVITIES / KELENGKAPAN BERKAS */}
-                                <div className="hidden xl:block">
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        ACTIVITIES
-                                    </p>
-                                    <div className="flex items-center gap-1.5">
-                                        <div className="w-6 h-6 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[10px]" title="Identitas Pemohon">
-                                            🪪
-                                        </div>
-                                        <div className="w-6 h-6 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[10px]" title="Sertifikat SHM / Alas Hak">
-                                            📜
-                                        </div>
-                                        <div className="w-6 h-6 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[10px]" title="Data Objek Pajak">
-                                            🏠
-                                        </div>
-                                        <div className="w-6 h-6 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[10px]" title="Dokumen Pendukung">
-                                            📋
-                                        </div>
-                                    </div>
+                                {/* 4. STATUS Indicator */}
+                                <div>
+                                    <span
+                                        className={`inline-flex items-center gap-1 font-bold text-xs ${app.status === 'SUBMITTED'
+                                            ? 'text-sky-600'
+                                            : app.status === 'REVISION'
+                                                ? 'text-amber-600'
+                                                : 'text-slate-600'
+                                            }`}
+                                    >
+                                        {app.status === 'SUBMITTED' ? (
+                                            <Clock className="w-3.5 h-3.5 text-sky-500" />
+                                        ) : (
+                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                        )}
+                                        {app.status}
+                                    </span>
                                 </div>
 
                                 {/* GARIS VERTIKAL 2 */}
                                 <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
 
-                                {/* 5. Dual Status Indicator (VERIFIKASI & STATUS) */}
-                                <div className="flex items-center gap-5 text-xs">
-                                    <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                                            VERIFIKASI
-                                        </p>
-                                        <span className="inline-flex items-center gap-1 font-bold text-emerald-600 text-xs">
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                            Completed
-                                        </span>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                                            STATUS
-                                        </p>
-                                        <span
-                                            className={`inline-flex items-center gap-1 font-bold text-xs ${app.status === 'SUBMITTED'
-                                                ? 'text-sky-600'
-                                                : app.status === 'REVISION'
-                                                    ? 'text-amber-600'
-                                                    : 'text-slate-600'
-                                                }`}
-                                        >
-                                            {app.status === 'SUBMITTED' ? (
-                                                <Clock className="w-3.5 h-3.5 text-sky-500" />
-                                            ) : (
-                                                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                            )}
-                                            {app.status}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* GARIS VERTIKAL 3 */}
-                                <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
-
-                                {/* 6. No. Pelayanan & Tombol Aksi */}
+                                {/* 5. No. Pelayanan & Tombol Aksi (Titik 3 Edit) */}
                                 <div className="flex items-center gap-4 justify-end w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                                            NO. PELAYANAN
-                                        </p>
                                         <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                                             #{app.applicationNumber}
                                         </span>
                                     </div>
@@ -315,99 +433,180 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                     {isEditable ? (
                                         <Link
                                             href={`/dashboard/applications/${app.id}/edit`}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                                            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
+                                            title="Edit permohonan"
                                         >
-                                            <Edit3 className="w-3.5 h-3.5" />
-                                            View note
+                                            <MoreVertical className="w-4 h-4" />
                                         </Link>
                                     ) : (
-                                        <span className="text-xs text-slate-400 italic">Terkunci</span>
+                                        <button
+                                            type="button"
+                                            disabled
+                                            className="p-1.5 text-slate-300 cursor-not-allowed"
+                                            title="Permohonan terkunci"
+                                        >
+                                            <MoreVertical className="w-4 h-4" />
+                                        </button>
                                     )}
-
-                                    <button
-                                        type="button"
-                                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
-                                    >
-                                        <MoreVertical className="w-4 h-4" />
-                                    </button>
                                 </div>
                             </div>
                         );
                     })}
                 </div>
             ) : (
-                /* ================= MODE 2: TABEL RINGKAS (TABLE VIEW) ================= */
+                /* ================= MODE 2: TABEL RINGKAS (TABLE VIEW RAPI, SHARP & PRESISI) ================= */
                 <div className="bg-white rounded-sm border border-slate-200/80 shadow-xs overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                                    <th className="py-3.5 px-4">No. Pelayanan</th>
-                                    <th className="py-3.5 px-4">Nama Pemohon</th>
-                                    <th className="py-3.5 px-4">Jenis Permohonan</th>
-                                    <th className="py-3.5 px-4">Jumlah Objek</th>
-                                    <th className="py-3.5 px-4">Status</th>
-                                    <th className="py-3.5 px-4">Tanggal Pelayanan</th>
-                                    <th className="py-3.5 px-4 text-right">Aksi</th>
+                                <tr className="bg-slate-50/80 text-[11.5px] font-bold text-slate-600 border-b border-slate-200/80">
+                                    <th className="relative py-3 px-3.5 whitespace-nowrap text-center w-10">
+                                        <span>No.</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>No. Permohonan</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Nama Pemohon</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Nomor Objek Pajak</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Jenis Permohonan</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Luas (LT / LB)</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Status</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Tgl Masuk</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="relative py-3 px-4 whitespace-nowrap">
+                                        <span>Tgl Selesai</span>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-px bg-slate-300/80" />
+                                    </th>
+                                    <th className="py-3 px-4 whitespace-nowrap text-center">
+                                        <span>Aksi</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                                {applications.map((app) => {
+                                {filteredApplications.map((app, index) => {
                                     const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
-                                    const applicantName = firstReq?.taxSubjectData?.name || '-';
+                                    const firstComp = Array.isArray(app.complementaryData) ? app.complementaryData[0] : null;
+                                    const applicantName = firstReq?.taxSubjectData?.name || `Permohonan #${app.applicationNumber}`;
+                                    const landArea = firstReq?.taxObjectData?.landArea ?? 120;
+                                    const buildingArea = firstReq?.taxObjectData?.buildingArea ?? 45;
+                                    const rawNop = firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
+                                    const formattedNop = formatNop(rawNop);
+
                                     const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
                                         code: app.applicationType,
                                         title: app.applicationType,
                                         badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
                                     };
                                     const isEditable = app.status === 'SUBMITTED' || app.status === 'REVISION';
-                                    const reqCount = Array.isArray(app.requestedData) ? app.requestedData.length : 1;
 
                                     return (
                                         <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="py-3.5 px-4 font-mono font-bold text-[#00a389]">
-                                                {app.applicationNumber}
+                                            {/* 0. Nomor Urut */}
+                                            <td className="py-3 px-3.5 whitespace-nowrap text-center font-semibold text-slate-400 text-xs">
+                                                {index + 1}
                                             </td>
-                                            <td className="py-3.5 px-4 font-semibold text-slate-800">
+
+                                            {/* 1. No. Pelayanan */}
+                                            <td className="py-3 px-4 whitespace-nowrap font-bold text-slate-800 text-xs">
+                                                #{app.applicationNumber}
+                                            </td>
+
+                                            {/* 2. Nama Pemohon */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-sm font-bold text-slate-900 tracking-tight">
                                                 {applicantName}
                                             </td>
-                                            <td className="py-3.5 px-4 font-medium text-slate-700">
-                                                <span
-                                                    title={typeInfo.title}
-                                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeInfo.badgeStyle}`}
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                                    {typeInfo.code} - {typeInfo.title}
+
+                                            {/* 3. NOP Objek */}
+                                            <td className="py-3 px-4 whitespace-nowrap">
+                                                <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs tracking-tight inline-block">
+                                                    {formattedNop}
                                                 </span>
                                             </td>
-                                            <td className="py-3.5 px-4 text-slate-500">
-                                                {reqCount} Objek Dimohon
-                                            </td>
-                                            <td className="py-3.5 px-4">
+
+                                            {/* 4. Jenis Permohonan */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-center">
                                                 <span
-                                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${app.status === 'SUBMITTED'
-                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                    title={typeInfo.title}
+                                                    className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200/80"
+                                                >
+                                                    {typeInfo.code}
+                                                </span>
+                                            </td>
+
+                                            {/* 5. Luas (LT / LB) */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-[11px] text-slate-500 font-medium">
+                                                <span title="Luas Tanah"><span className="text-slate-400 font-semibold">LT:</span> {landArea} m²</span>
+                                                <span className="text-slate-300 mx-1.5">•</span>
+                                                <span title="Luas Bangunan"><span className="text-slate-400 font-semibold">LB:</span> {buildingArea} m²</span>
+                                            </td>
+
+                                            {/* 6. Status */}
+                                            <td className="py-3 px-4 whitespace-nowrap">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 font-bold text-xs ${app.status === 'SUBMITTED'
+                                                        ? 'text-sky-600'
                                                         : app.status === 'REVISION'
-                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                            ? 'text-amber-600'
+                                                            : 'text-slate-600'
                                                         }`}
                                                 >
+                                                    {app.status === 'SUBMITTED' ? (
+                                                        <Clock className="w-3.5 h-3.5 text-sky-500" />
+                                                    ) : (
+                                                        <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                                    )}
                                                     {app.status}
                                                 </span>
                                             </td>
-                                            <td className="py-3.5 px-4 text-slate-500">
+
+                                            {/* 7. Tgl Masuk */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-600 font-medium">
                                                 {formatDateShort(app.serviceNumberDate)}
                                             </td>
-                                            <td className="py-3.5 px-4 text-right">
+
+                                            {/* 8. Tgl Selesai */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-600 font-medium">
+                                                {formatDateShort(app.completionDate || new Date(Date.now() + 7 * 86400000))}
+                                            </td>
+
+                                            {/* 9. Aksi (Titik 3) */}
+                                            <td className="py-3 px-4 whitespace-nowrap text-center">
                                                 {isEditable ? (
                                                     <Link
                                                         href={`/dashboard/applications/${app.id}/edit`}
-                                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
+                                                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-colors inline-block cursor-pointer"
+                                                        title="Edit permohonan"
                                                     >
-                                                        <Edit3 className="w-3.5 h-3.5" /> Edit
+                                                        <MoreVertical className="w-4 h-4" />
                                                     </Link>
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 italic">Terkunci</span>
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        className="p-1.5 text-slate-300 cursor-not-allowed inline-block"
+                                                        title="Permohonan terkunci"
+                                                    >
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </button>
                                                 )}
                                             </td>
                                         </tr>

@@ -105,7 +105,7 @@ export async function createApplication(
             return newApp;
         });
 
-        revalidatePath('/dashboard/tasks');
+        revalidatePath('/dashboard/workflow/pengajuan');
         revalidatePath('/dashboard/applications');
 
         return {
@@ -235,7 +235,7 @@ export async function editApplication(
             return updated;
         });
 
-        revalidatePath('/dashboard/tasks');
+        revalidatePath('/dashboard/workflow/pengajuan');
         revalidatePath(`/dashboard/applications/${id}`);
 
         return {
