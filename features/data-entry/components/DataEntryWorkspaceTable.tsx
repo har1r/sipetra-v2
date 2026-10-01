@@ -21,12 +21,18 @@ import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '../schemas/application
 
 interface ApplicationItem {
     id: string;
-    applicationNumber: string;
+    applicationId?: string;
+    applicationNumber?: string;
+    smartgovId?: string;
     applicationType: ApplicationTypeEnum;
     status: string;
-    serviceNumberDate: Date | string;
+    serviceNumberDate?: Date | string;
+    smartgovCreatedAt?: Date | string;
     completionDate?: Date | string | null;
+    taxSubject?: any;
+    taxObject?: any;
     requestedData?: any;
+    complementary?: any;
     complementaryData?: any;
     updatedAt: Date | string;
 }
@@ -312,11 +318,12 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                 <div className="space-y-3">
                     {filteredApplications.map((app) => {
                         const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
-                        const firstComp = Array.isArray(app.complementaryData) ? app.complementaryData[0] : null;
-                        const applicantName = firstReq?.taxSubjectData?.name || `Permohonan #${app.applicationNumber}`;
-                        const landArea = firstReq?.taxObjectData?.landArea ?? 120;
-                        const buildingArea = firstReq?.taxObjectData?.buildingArea ?? 45;
-                        const rawNop = firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
+                        const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : (Array.isArray(app.complementaryData) ? app.complementaryData[0] : null);
+                        const appNumber = app.applicationId || app.applicationNumber || '-';
+                        const applicantName = app.taxSubject?.name || firstReq?.taxSubjectData?.name || `Permohonan #${appNumber}`;
+                        const landArea = app.taxObject?.landArea ?? firstReq?.taxObjectData?.landArea ?? 120;
+                        const buildingArea = app.taxObject?.buildingArea ?? firstReq?.taxObjectData?.buildingArea ?? 45;
+                        const rawNop = app.taxObject?.nop || app.taxObject?.nopTemporary || firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
                         const formattedNop = formatNop(rawNop);
 
                         const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
@@ -426,7 +433,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                                 <div className="flex items-center gap-4 justify-end w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                                     <div>
                                         <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs">
-                                            #{app.applicationNumber}
+                                            #{app.applicationId || app.applicationNumber}
                                         </span>
                                     </div>
 
@@ -504,11 +511,12 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
                             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                                 {filteredApplications.map((app, index) => {
                                     const firstReq = Array.isArray(app.requestedData) ? app.requestedData[0] : null;
-                                    const firstComp = Array.isArray(app.complementaryData) ? app.complementaryData[0] : null;
-                                    const applicantName = firstReq?.taxSubjectData?.name || `Permohonan #${app.applicationNumber}`;
-                                    const landArea = firstReq?.taxObjectData?.landArea ?? 120;
-                                    const buildingArea = firstReq?.taxObjectData?.buildingArea ?? 45;
-                                    const rawNop = firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
+                                    const firstComp = Array.isArray(app.complementary) ? app.complementary[0] : (Array.isArray(app.complementaryData) ? app.complementaryData[0] : null);
+                                    const appNumber = app.applicationId || app.applicationNumber || '-';
+                                    const applicantName = app.taxSubject?.name || firstReq?.taxSubjectData?.name || `Permohonan #${appNumber}`;
+                                    const landArea = app.taxObject?.landArea ?? firstReq?.taxObjectData?.landArea ?? 120;
+                                    const buildingArea = app.taxObject?.buildingArea ?? firstReq?.taxObjectData?.buildingArea ?? 45;
+                                    const rawNop = app.taxObject?.nop || app.taxObject?.nopTemporary || firstReq?.taxObjectData?.nop || firstReq?.taxObjectData?.nopTemporary || firstComp?.taxObjectData?.nop;
                                     const formattedNop = formatNop(rawNop);
 
                                     const typeInfo = APPLICATION_TYPE_UI[app.applicationType] || {
@@ -527,7 +535,7 @@ export function DataEntryWorkspaceTable({ applications }: DataEntryWorkspaceTabl
 
                                             {/* 1. No. Pelayanan */}
                                             <td className="py-3 px-4 whitespace-nowrap font-bold text-slate-800 text-xs">
-                                                #{app.applicationNumber}
+                                                #{app.applicationId || app.applicationNumber}
                                             </td>
 
                                             {/* 2. Nama Pemohon */}

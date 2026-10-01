@@ -48,11 +48,14 @@ export default async function EditApplicationPage({ params }: EditApplicationPag
     const initialData = {
         id: appData.id,
         applicationType: appData.applicationType,
-        applicationNumber: appData.applicationNumber,
-        serviceNumberDate: new Date(appData.serviceNumberDate),
-        completionDate: new Date(appData.completionDate),
-        complementaryData: appData.complementaryData as any,
-        requestedData: appData.requestedData as any,
+        applicationId: appData.applicationId,
+        smartgovId: appData.smartgovId,
+        smartgovCreatedAt: new Date(appData.smartgovCreatedAt),
+        complementary: (appData.complementary || []) as any,
+        taxSubject: (appData.taxSubject || {}) as any,
+        taxObject: (appData.taxObject || {}) as any,
+        files: appData.files || [],
+        note: appData.note || '',
     };
 
     return <ApplicationForm mode="edit" initialData={initialData} />;

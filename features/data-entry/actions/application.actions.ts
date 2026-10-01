@@ -8,7 +8,7 @@ import {
     ApplicationFormInput,
     applicationFormSchema,
 } from '../schemas/application.schema';
-import { ApplicationStatus, AuditAction, UserRole } from '@prisma/client';
+import { ApplicationStatus, AuditAction, SubmissionChannel, UserRole } from '@prisma/client';
 
 export type ActionResponse<T = unknown> = {
     success: boolean;
@@ -17,13 +17,12 @@ export type ActionResponse<T = unknown> = {
     errors?: Record<string, string[]>;
 };
 
-
 /**
  * Server Action: Membuat Permohonan Baru (Create Application)
  */
 export async function createApplication(
     formData: ApplicationFormInput
-): Promise<ActionResponse<{ id: string, applicationNumber: string }>> {
+): Promise<ActionResponse<{ id: string; applicationId: string }>> {
     try {
         const session = await getServerSession(authOptions);
         if (!session || !session.user || !session.user.id) {
@@ -33,11 +32,11 @@ export async function createApplication(
             };
         }
 
-        const allowedRoles: UserRole[] = [UserRole.DATA_ENTRY];
+        const allowedRoles: UserRole[] = [UserRole.FRONT_OFFICER, UserRole.VERIFICATOR];
         if (!allowedRoles.includes(session.user.role as UserRole)) {
             return {
                 success: false,
-                message: 'Anda tidak memiliki hak akses untuk membuat permohonan.',
+                message: 'Anda tidak memiliki hak akses untuk mendaftarkan permohonan.',
             };
         }
 
@@ -53,67 +52,65 @@ export async function createApplication(
         const validData = validationResult.data;
 
         const existingApp = await prisma.application.findUnique({
-            where: { applicationNumber: validData.applicationNumber },
+            where: { applicationId: validData.applicationId },
         });
         if (existingApp) {
             return {
                 success: false,
-                message: `Nomor permohonan "${validData.applicationNumber}" sudah terdaftar di sistem.`,
+                message: `Nomor permohonan "${validData.applicationId}" sudah terdaftar di sistem.`,
                 errors: {
-                    applicationNumber: ['Nomor permohonan ini sudah digunakan.'],
+                    applicationId: ['Nomor permohonan ini sudah digunakan.'],
                 },
             };
         }
 
-        const result = await prisma.$transaction(async (tx) => {
-            const newApp = await tx.application.create({
-                data: {
-                    applicationType: validData.applicationType,
-                    applicationNumber: validData.applicationNumber,
-                    serviceNumberDate: validData.serviceNumberDate,
-                    completionDate: validData.completionDate,
-                    status: ApplicationStatus.SUBMITTED,
-                    complementaryData: validData.complementaryData,
-                    requestedData: validData.requestedData,
-                    createdById: session.user.id,
+        const newApp = await prisma.application.create({
+            data: {
+                applicationId: validData.applicationId,
+                smartgovId: validData.smartgovId,
+                smartgovCreatedAt: validData.smartgovCreatedAt,
+                applicationType: validData.applicationType,
+                status: ApplicationStatus.SUBMITTED,
+                submissionChannel: SubmissionChannel.FRONT_OFFICER,
+                frontOfficerId: session.user.id,
+                taxSubject: validData.taxSubject,
+                taxObject: validData.taxObject,
+                complementary: validData.complementary,
+                files: validData.files,
+                note: validData.note,
+                sla: {
+                    totalStartedAt: new Date(),
+                    totalDeadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+                    currentStageMinutesLimit: 2 * 24 * 60,
                 },
-            });
-
-            await tx.auditLog.create({
-                data: {
-                    action: AuditAction.SUBMIT_DATA,
-                    entityType: 'APPLICATION',
-                    entityId: newApp.id,
-                    actorId: session.user.id,
-                    newStatus: ApplicationStatus.SUBMITTED,
-                    metadata: {
-                        applicationNumber: newApp.applicationNumber,
-                        applicationType: newApp.applicationType,
-                    },
-                },
-            });
-
-            await tx.applicationSnapshot.create({
-                data: {
-                    applicationId: newApp.id,
-                    snapshotType: 'INITIAL_SUBMISSION',
-                    snapshotData: JSON.parse(JSON.stringify(newApp)),
-                    actorId: session.user.id,
-                    note: 'Permohonan baru berhasil dibuat.',
-                },
-            });
-            return newApp;
+            },
         });
 
-        revalidatePath('/dashboard/workflow/pengajuan');
+        await prisma.auditLog.create({
+            data: {
+                applicationId: newApp.id,
+                actorId: session.user.id,
+                actorName: session.user.name,
+                actorRole: session.user.role as UserRole,
+                action: AuditAction.SUBMIT,
+                newStatus: ApplicationStatus.SUBMITTED,
+                metadata: {
+                    applicationId: newApp.applicationId,
+                    smartgovId: newApp.smartgovId,
+                    applicationType: newApp.applicationType,
+                },
+            },
+        });
+
         revalidatePath('/dashboard/applications');
+        revalidatePath('/dashboard');
 
         return {
             success: true,
             message: 'Permohonan berhasil disimpan!',
             data: {
-                id: result.id,
-                applicationNumber: result.applicationNumber,
+                id: newApp.id,
+                applicationId: newApp.applicationId,
             },
         };
     } catch (error) {
@@ -123,7 +120,7 @@ export async function createApplication(
             message: 'Terjadi kesalahan pada server saat menyimpan permohonan.',
         };
     }
-};
+}
 
 /**
  * Server Action: Memperbarui Permohonan (Edit Application)
@@ -131,7 +128,7 @@ export async function createApplication(
 export async function editApplication(
     id: string,
     formData: ApplicationFormInput
-): Promise<ActionResponse<{ id: string; applicationNumber: string }>> {
+): Promise<ActionResponse<{ id: string; applicationId: string }>> {
     try {
         const session = await getServerSession(authOptions);
         if (!session || !session.user || !session.user.id) {
@@ -141,7 +138,7 @@ export async function editApplication(
             };
         }
 
-        const allowedRoles: UserRole[] = [UserRole.DATA_ENTRY];
+        const allowedRoles: UserRole[] = [UserRole.FRONT_OFFICER, UserRole.VERIFICATOR];
         if (!allowedRoles.includes(session.user.role as UserRole)) {
             return {
                 success: false,
@@ -158,14 +155,16 @@ export async function editApplication(
                 message: 'Data permohonan tidak ditemukan.',
             };
         }
+
         const editableStatuses: ApplicationStatus[] = [
             ApplicationStatus.SUBMITTED,
-            ApplicationStatus.REVISION,
+            ApplicationStatus.INTERNAL_REVISION,
+            ApplicationStatus.EXTERNAL_REVISION,
         ];
         if (!editableStatuses.includes(existingApp.status)) {
             return {
                 success: false,
-                message: `Permohonan dengan status "${existingApp.status}" sudah tidak dapat diubah.`,
+                message: `Permohonan dengan status "${existingApp.status}" sudah tidak dapat diubah di formulir pendaftaran.`,
             };
         }
 
@@ -180,62 +179,53 @@ export async function editApplication(
         }
         const validData = validationResult.data;
 
-        if (validData.applicationNumber !== existingApp.applicationNumber) {
+        if (validData.applicationId !== existingApp.applicationId) {
             const numberConflict = await prisma.application.findUnique({
-                where: { applicationNumber: validData.applicationNumber },
+                where: { applicationId: validData.applicationId },
             });
             if (numberConflict) {
                 return {
                     success: false,
-                    message: `Nomor permohonan "${validData.applicationNumber}" sudah digunakan oleh permohonan lain.`,
+                    message: `Nomor permohonan "${validData.applicationId}" sudah digunakan oleh permohonan lain.`,
                     errors: {
-                        applicationNumber: ['Nomor permohonan ini sudah digunakan.'],
+                        applicationId: ['Nomor permohonan ini sudah digunakan.'],
                     },
                 };
             }
         }
 
-        const updatedApp = await prisma.$transaction(async (tx) => {
-            const updated = await tx.application.update({
-                where: { id },
-                data: {
-                    applicationType: validData.applicationType,
-                    applicationNumber: validData.applicationNumber,
-                    serviceNumberDate: validData.serviceNumberDate,
-                    completionDate: validData.completionDate,
-                    complementaryData: validData.complementaryData,
-                    requestedData: validData.requestedData,
-                },
-            });
-
-            await tx.auditLog.create({
-                data: {
-                    action: existingApp.status === "SUBMITTED" ? AuditAction.SUBMIT_DATA : AuditAction.REVISE_DATA,
-                    entityType: 'APPLICATION',
-                    entityId: id,
-                    actorId: session.user.id,
-                    oldStatus: existingApp.status,
-                    newStatus: updated.status,
-                    metadata: {
-                        applicationNumber: updated.applicationNumber,
-                        applicationType: updated.applicationType,
-                    },
-                },
-            });
-
-            await tx.applicationSnapshot.create({
-                data: {
-                    applicationId: id,
-                    snapshotType: 'REVISION',
-                    snapshotData: JSON.parse(JSON.stringify(updated)),
-                    actorId: session.user.id,
-                    note: `Permohonan ${existingApp.status === "SUBMITTED" ? "diperbaharui" : "direvisi"} oleh pengguna.`,
-                },
-            });
-            return updated;
+        const updatedApp = await prisma.application.update({
+            where: { id },
+            data: {
+                applicationId: validData.applicationId,
+                smartgovId: validData.smartgovId,
+                smartgovCreatedAt: validData.smartgovCreatedAt,
+                applicationType: validData.applicationType,
+                taxSubject: validData.taxSubject,
+                taxObject: validData.taxObject,
+                complementary: validData.complementary,
+                files: validData.files,
+                note: validData.note,
+            },
         });
 
-        revalidatePath('/dashboard/workflow/pengajuan');
+        await prisma.auditLog.create({
+            data: {
+                applicationId: id,
+                actorId: session.user.id,
+                actorName: session.user.name,
+                actorRole: session.user.role as UserRole,
+                action: existingApp.status === ApplicationStatus.SUBMITTED ? AuditAction.SUBMIT : AuditAction.RESUBMIT_REVISION,
+                previousStatus: existingApp.status,
+                newStatus: updatedApp.status,
+                metadata: {
+                    applicationId: updatedApp.applicationId,
+                    applicationType: updatedApp.applicationType,
+                },
+            },
+        });
+
+        revalidatePath('/dashboard/applications');
         revalidatePath(`/dashboard/applications/${id}`);
 
         return {
@@ -243,7 +233,7 @@ export async function editApplication(
             message: 'Permohonan berhasil diperbarui!',
             data: {
                 id: updatedApp.id,
-                applicationNumber: updatedApp.applicationNumber,
+                applicationId: updatedApp.applicationId,
             },
         };
     } catch (error) {
@@ -253,10 +243,10 @@ export async function editApplication(
             message: 'Terjadi kesalahan pada server saat memperbarui permohonan.',
         };
     }
-};
+}
 
 /**
- * Server Action: Mengambil Data Permohonan Berdasarkan ID (untuk Initial Values Mode Edit)
+ * Server Action: Mengambil Data Permohonan Berdasarkan ID
  */
 export async function getApplicationById(id: string) {
     try {
@@ -264,18 +254,26 @@ export async function getApplicationById(id: string) {
         if (!session || !session.user || !session.user.id) {
             return {
                 success: false,
-                message: 'Anda harus login terlebih dahulu untuk mengubah permohonan.',
+                message: 'Anda harus login terlebih dahulu.',
             };
         }
 
         const application = await prisma.application.findUnique({
             where: { id },
             include: {
-                createdBy: {
+                frontOfficer: {
                     select: {
                         name: true,
+                        email: true,
                     },
                 },
+                verificator: {
+                    select: {
+                        name: true,
+                        email: true,
+                    },
+                },
+                bundle: true,
             },
         });
 

@@ -18,7 +18,7 @@ import { Loader2, Upload, Paperclip, X } from 'lucide-react';
 interface ApplicationFormProps {
     mode: 'create' | 'edit';
     initialData?: ApplicationFormInput & { id?: string };
-    onSuccess?: (result: { id: string; applicationNumber: string }) => void;
+    onSuccess?: (result: { id: string; applicationId: string }) => void;
 }
 
 export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFormProps) {
@@ -29,24 +29,19 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
 
     const defaultValues: ApplicationFormInput = initialData || {
         applicationType: 'PARTIAL_MUTATION',
-        applicationNumber: '',
-        serviceNumberDate: new Date(),
-        completionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        complementaryData: [
+        applicationId: '',
+        smartgovId: '',
+        smartgovCreatedAt: new Date(),
+        complementary: [
             {
                 taxSubjectData: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
                 taxObjectData: { nop: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
-                isPrimary: true,
             },
         ],
-        requestedData: [
-            {
-                taxSubjectData: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
-                taxObjectData: { nopTemporary: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
-                notes: '',
-                digitalArchives: [],
-            },
-        ],
+        taxSubject: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
+        taxObject: { nopTemporary: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
+        files: [],
+        note: '',
     };
 
     const form = useForm<ApplicationFormInput>({
@@ -72,7 +67,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
 
     const steps = [
         { id: 'info', title: 'Informasi Permohonan' },
-        ...(!isNoComplementary ? [{ id: 'complementary', title: 'Data Pelengkap' }] : []),
+        ...(!isNoComplementary ? [{ id: 'complementary', title: 'Data Pelengkap (Asal)' }] : []),
         { id: 'requested', title: 'Data Dimohonkan' },
         { id: 'review', title: 'Ringkasan & Simpan' },
     ];
@@ -86,27 +81,18 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
         remove: removeComp,
     } = useFieldArray({
         control,
-        name: 'complementaryData',
-    });
-
-    const {
-        fields: reqFields,
-        append: appendReq,
-        remove: removeReq,
-    } = useFieldArray({
-        control,
-        name: 'requestedData',
+        name: 'complementary',
     });
 
     const handleNextStep = async () => {
         let isStepValid = true;
 
         if (activeStep.id === 'info') {
-            isStepValid = await trigger(['applicationType', 'applicationNumber', 'serviceNumberDate', 'completionDate']);
+            isStepValid = await trigger(['applicationType', 'applicationId', 'smartgovId', 'smartgovCreatedAt']);
         } else if (activeStep.id === 'complementary') {
-            isStepValid = await trigger('complementaryData');
+            isStepValid = await trigger('complementary');
         } else if (activeStep.id === 'requested') {
-            isStepValid = await trigger('requestedData');
+            isStepValid = await trigger(['taxSubject', 'taxObject', 'files', 'note']);
         }
 
         if (isStepValid && currentStepIndex < totalSteps - 1) {
@@ -160,7 +146,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                     {mode === 'create' ? 'Tambah Permohonan Baru' : 'Edit Permohonan Data Entry'}
                 </h1>
                 <p className="text-xs text-slate-500 max-w-3xl">
-                    Lengkapi formulir pendaftaran layanan permohonan Pajak Bumi dan/atau Bangunan sesuai dengan dokumen pelayanan fisik.
+                    Lengkapi formulir pendaftaran layanan permohonan Pajak Bumi dan/atau Bangunan sesuai dengan dokumen pelayanan fisik dan SmartGov.
                 </p>
             </div>
 
@@ -229,7 +215,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                 <div className="lg:col-span-4 space-y-1">
                                     <h3 className="text-sm font-semibold text-slate-800">Kategori Permohonan</h3>
                                     <p className="text-xs text-slate-500 leading-relaxed">
-                                        UPT Pajak Daerah Wilayah IV melayani 7 jenis permohonan Pajak Bumi dan/Bangunan yang bisa dipilih dan diajukan.
+                                        Pilih jenis permohonan Pajak Bumi dan Bangunan yang diajukan oleh Wajib Pajak.
                                     </p>
                                 </div>
 
@@ -263,10 +249,9 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
 
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
                                 <div className="lg:col-span-4 space-y-1">
-                                    <h3 className="text-sm font-semibold text-slate-800">Nomor Permohonan & Tanggal</h3>
+                                    <h3 className="text-sm font-semibold text-slate-800">Nomor Registrasi</h3>
                                     <p className="text-xs text-slate-500 leading-relaxed">
-                                        Nomor permohonan merupakan bukti sah dari permohonan yang diajukan dan bersifat unik, kemudian tanggal diterima merupakan tanggal dimana pengajuan permohonan diterima
-                                        serta tanggal selesai merupakan tanggal pasti selesai diprosesnya permohonan.
+                                        Nomor permohonan internal SIPETRA dan nomor pelayanan pada sistem SmartGov.
                                     </p>
                                 </div>
 
@@ -278,46 +263,48 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                             </label>
                                             <input
                                                 type="text"
-                                                {...register('applicationNumber')}
+                                                {...register('applicationId')}
                                                 placeholder="2026.001.99"
-                                                className={`w-full bg-slate-50 border ${errors.applicationNumber ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                                                className={`w-full bg-slate-50 border ${errors.applicationId ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                                     } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
                                             />
-                                            {errors.applicationNumber && (
+                                            {errors.applicationId && (
                                                 <p className="text-xs text-rose-500 mt-1 font-medium">
-                                                    {errors.applicationNumber.message}
+                                                    {errors.applicationId.message}
                                                 </p>
                                             )}
                                         </div>
 
                                         <div>
                                             <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                Tanggal Diterima <span className="text-rose-500">*</span>
+                                                Nomor SmartGov <span className="text-rose-500">*</span>
                                             </label>
                                             <input
-                                                type="date"
-                                                value={
-                                                    watch('serviceNumberDate')
-                                                        ? new Date(watch('serviceNumberDate')).toISOString().split('T')[0]
-                                                        : ''
-                                                }
-                                                onChange={(e) => setValue('serviceNumberDate', new Date(e.target.value))}
-                                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all"
+                                                type="text"
+                                                {...register('smartgovId')}
+                                                placeholder="SG-2026-9081"
+                                                className={`w-full bg-slate-50 border ${errors.smartgovId ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                                                    } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
                                             />
+                                            {errors.smartgovId && (
+                                                <p className="text-xs text-rose-500 mt-1 font-medium">
+                                                    {errors.smartgovId.message}
+                                                </p>
+                                            )}
                                         </div>
 
                                         <div>
                                             <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                Tanggal Selesai <span className="text-rose-500">*</span>
+                                                Tgl Pendaftaran SmartGov <span className="text-rose-500">*</span>
                                             </label>
                                             <input
                                                 type="date"
                                                 value={
-                                                    watch('completionDate')
-                                                        ? new Date(watch('completionDate')).toISOString().split('T')[0]
+                                                    watch('smartgovCreatedAt')
+                                                        ? new Date(watch('smartgovCreatedAt')).toISOString().split('T')[0]
                                                         : ''
                                                 }
-                                                onChange={(e) => setValue('completionDate', new Date(e.target.value))}
+                                                onChange={(e) => setValue('smartgovCreatedAt', new Date(e.target.value))}
                                                 className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all"
                                             />
                                         </div>
@@ -340,7 +327,6 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                             appendComp({
                                                 taxSubjectData: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
                                                 taxObjectData: { nop: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
-                                                isPrimary: false,
                                             })
                                         }
                                         className="px-3 py-1.5 bg-[#00a389]/10 hover:bg-[#00a389]/20 text-[#007a66] text-xs font-semibold rounded-sm transition-colors cursor-pointer"
@@ -357,52 +343,33 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                             <span className="text-xs font-bold text-slate-800">
                                                 NOP Asal #{idx + 1}
                                             </span>
-                                            {watch(`complementaryData.${idx}.isPrimary`) && (
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-amber-100 text-amber-800 border border-amber-200">
-                                                    NOP Utama
-                                                </span>
-                                            )}
                                         </div>
 
-                                        <div className="flex items-center gap-3">
-                                            {(currentAppType === 'MERGER_MUTATION' || currentAppType === 'MERGER_AND_PARTIAL_MUTATION') && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        compFields.forEach((_, i) => setValue(`complementaryData.${i}.isPrimary`, i === idx));
-                                                    }}
-                                                    className="text-xs text-[#00a389] hover:underline font-semibold cursor-pointer"
-                                                >
-                                                    Jadikan NOP Utama
-                                                </button>
-                                            )}
-
-                                            {compFields.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeComp(idx)}
-                                                    className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
-                                                >
-                                                    Hapus
-                                                </button>
-                                            )}
-                                        </div>
+                                        {compFields.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeComp(idx)}
+                                                className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                                            >
+                                                Hapus
+                                            </button>
+                                        )}
                                     </div>
 
                                     <TaxSubjectForm
-                                        prefix={`complementaryData.${idx}.taxSubjectData`}
+                                        prefix={`complementary.${idx}.taxSubjectData`}
                                         register={register}
                                         errors={errors}
-                                        title={`Data Subjek Pajak #${idx + 1}`}
+                                        title={`Data Subjek Pajak Asal #${idx + 1}`}
                                         isCorrection={isCorrection}
                                         isRequestedData={false}
                                     />
 
                                     <TaxObjectForm
-                                        prefix={`complementaryData.${idx}.taxObjectData`}
+                                        prefix={`complementary.${idx}.taxObjectData`}
                                         register={register}
                                         errors={errors}
-                                        title={`Data Objek Pajak #${idx + 1}`}
+                                        title={`Data Objek Pajak Asal #${idx + 1}`}
                                         isRequestedData={false}
                                         isCorrection={isCorrection}
                                     />
@@ -413,158 +380,108 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
 
                     {activeStep.id === 'requested' && (
                         <div className="space-y-6">
-                            {(currentAppType === 'PARTIAL_MUTATION' || currentAppType === 'MERGER_AND_PARTIAL_MUTATION') && (
-                                <div className="flex items-center justify-between pb-2">
-                                    <span className="text-xs font-semibold text-slate-500">
-                                        Data Dimohonkan ({reqFields.length} Objek)
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            appendReq({
-                                                taxSubjectData: { name: '', whatsappNumber: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '' },
-                                                taxObjectData: { nopTemporary: '', address: '', block: '', neighborhoodUnit: '', communityUnit: '', subdistrict: '', village: '', landArea: null, buildingArea: null, certificate: '' },
-                                                notes: '',
-                                                digitalArchives: [],
-                                            })
-                                        }
-                                        className="px-3 py-1.5 bg-[#00a389]/10 hover:bg-[#00a389]/20 text-[#007a66] text-xs font-semibold rounded-sm transition-colors cursor-pointer"
-                                    >
-                                        Tambah Objek Pecahan
-                                    </button>
+                            <TaxSubjectForm
+                                prefix="taxSubject"
+                                register={register}
+                                errors={errors}
+                                title="Data Wajib Pajak Pemohon"
+                                isCorrection={isCorrection}
+                                isRequestedData={true}
+                            />
+
+                            <TaxObjectForm
+                                prefix="taxObject"
+                                register={register}
+                                errors={errors}
+                                title="Data Objek Pajak Dimohonkan"
+                                isRequestedData={true}
+                                isCorrection={isCorrection}
+                            />
+
+                            {/* Section: Catatan & Lampiran Berkas Digital */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
+                                <div className="lg:col-span-4 space-y-1">
+                                    <h3 className="text-sm font-semibold text-slate-800">Catatan & Berkas Persyaratan</h3>
+                                    <p className="text-xs text-slate-500 leading-relaxed">
+                                        Tambahkan catatan pendaftaran dan unggah berkas persyaratan permohonan (KTP, Sertifikat, SPPT, dll.).
+                                    </p>
                                 </div>
-                            )}
 
-                            {reqFields.map((field, idx) => (
-                                <div key={field.id} className="space-y-4">
-                                    <div className="flex items-center justify-between pb-2  border-slate-200">
-                                        <span className="text-xs font-bold text-slate-800">
-                                            Data Dimohonkan #{idx + 1}
-                                        </span>
-
-                                        {reqFields.length > 1 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => removeReq(idx)}
-                                                className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
-                                            >
-                                                Hapus
-                                            </button>
-                                        )}
+                                <div className="lg:col-span-8 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
+                                            Catatan Permohonan <span className="text-slate-400 font-normal">(Opsional)</span>
+                                        </label>
+                                        <textarea
+                                            rows={2}
+                                            {...register('note')}
+                                            placeholder="Masukkan catatan khusus permohonan jika ada..."
+                                            className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all resize-none"
+                                        />
                                     </div>
 
-                                    <TaxSubjectForm
-                                        prefix={`requestedData.${idx}.taxSubjectData`}
-                                        register={register}
-                                        errors={errors}
-                                        title={`Subjek Pajak Dimohonkan #${idx + 1}`}
-                                        isCorrection={isCorrection}
-                                        isRequestedData={true}
-                                    />
-
-                                    <TaxObjectForm
-                                        prefix={`requestedData.${idx}.taxObjectData`}
-                                        register={register}
-                                        errors={errors}
-                                        title={`Objek Pajak Dimohonkan #${idx + 1}`}
-                                        isRequestedData={true}
-                                        isCorrection={isCorrection}
-                                    />
-
-                                    {/* Section: Catatan & Lampiran Berkas Digital */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 border-t border-slate-200">
-                                        <div className="lg:col-span-4 space-y-1">
-                                            <h3 className="text-sm font-semibold text-slate-800">Catatan & Lampiran Berkas</h3>
-                                            <p className="text-xs text-slate-500 leading-relaxed">
-                                                Tambahkan catatan permohonan dan upload berkas pendukung (SHM, KTP, SPPT, dll.).
+                                    <div>
+                                        <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
+                                            Upload Berkas Persyaratan <span className="text-slate-400 font-normal">(Opsional)</span>
+                                        </label>
+                                        <div className="p-4 border-2 border-dashed border-slate-200 rounded-sm bg-slate-50/50 hover:bg-slate-50 hover:border-[#00a389]/60 transition-all text-center space-y-2">
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept=".pdf,.png,.jpg,.jpeg"
+                                                id="file-upload-main"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const uploaded = Array.from(e.target.files || []);
+                                                    if (uploaded.length === 0) return;
+                                                    const currentFiles = watch('files') || [];
+                                                    const newUrls = uploaded.map((f) => URL.createObjectURL(f));
+                                                    setValue('files', [...currentFiles, ...newUrls]);
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor="file-upload-main"
+                                                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-[#00a389] text-slate-700 text-xs font-semibold rounded-sm cursor-pointer shadow-2xs transition-all"
+                                            >
+                                                <Upload className="w-3.5 h-3.5 text-[#00a389]" />
+                                                Pilih / Drag File Berkas
+                                            </label>
+                                            <p className="text-[11px] text-slate-400">
+                                                Format yang didukung: PDF, PNG, JPG (Maks. 10MB)
                                             </p>
                                         </div>
 
-                                        <div className="lg:col-span-8 space-y-4">
-                                            {/* Catatan Permohonan (Notes) */}
-                                            <div>
-                                                <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                    Catatan Permohonan <span className="text-slate-400 font-normal">(Opsional)</span>
-                                                </label>
-                                                <textarea
-                                                    rows={2}
-                                                    {...register(`requestedData.${idx}.notes` as const)}
-                                                    placeholder="Masukkan catatan khusus permohonan jika ada..."
-                                                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all resize-none"
-                                                />
-                                            </div>
-
-                                            {/* Upload Berkas Digital (Digital Archives) */}
-                                            <div>
-                                                <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                                                    Upload Berkas Digital <span className="text-slate-400 font-normal">(Opsional)</span>
-                                                </label>
-                                                <div className="p-4 border-2 border-dashed border-slate-200 rounded-sm bg-slate-50/50 hover:bg-slate-50 hover:border-[#00a389]/60 transition-all text-center space-y-2">
-                                                    <input
-                                                        type="file"
-                                                        multiple
-                                                        accept=".pdf,.png,.jpg,.jpeg"
-                                                        id={`file-upload-${idx}`}
-                                                        className="hidden"
-                                                        onChange={(e) => {
-                                                            const files = Array.from(e.target.files || []);
-                                                            if (files.length === 0) return;
-                                                            const currentArchives = watch(`requestedData.${idx}.digitalArchives`) || [];
-                                                            const newArchives = files.map((file) => ({
-                                                                urlBlob: URL.createObjectURL(file),
-                                                                fileName: file.name,
-                                                                status: 'ACTIVE' as const,
-                                                            }));
-                                                            setValue(`requestedData.${idx}.digitalArchives`, [...currentArchives, ...newArchives]);
-                                                        }}
-                                                    />
-                                                    <label
-                                                        htmlFor={`file-upload-${idx}`}
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-[#00a389] text-slate-700 text-xs font-semibold rounded-sm cursor-pointer shadow-2xs transition-all"
-                                                    >
-                                                        <Upload className="w-3.5 h-3.5 text-[#00a389]" />
-                                                        Pilih / Drag File Berkas
-                                                    </label>
-                                                    <p className="text-[11px] text-slate-400">
-                                                        Format yang didukung: PDF, PNG, JPG (Maks. 10MB)
-                                                    </p>
-                                                </div>
-
-                                                {/* List Berkas Ter-upload */}
-                                                {watch(`requestedData.${idx}.digitalArchives`) && watch(`requestedData.${idx}.digitalArchives`).length > 0 && (
-                                                    <div className="mt-3 space-y-2">
-                                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                            Berkas Terlampir ({watch(`requestedData.${idx}.digitalArchives`).length})
-                                                        </p>
-                                                        <div className="divide-y divide-slate-100 border border-slate-200 rounded-sm bg-white overflow-hidden">
-                                                            {watch(`requestedData.${idx}.digitalArchives`).map((archive: any, fileIdx: number) => (
-                                                                <div key={fileIdx} className="flex items-center justify-between p-2.5 text-xs">
-                                                                    <div className="flex items-center gap-2 min-w-0">
-                                                                        <Paperclip className="w-3.5 h-3.5 text-[#00a389] shrink-0" />
-                                                                        <span className="truncate font-medium text-slate-700">{archive.fileName || `Berkas #${fileIdx + 1}`}</span>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const currentArchives = watch(`requestedData.${idx}.digitalArchives`) || [];
-                                                                            const updated = currentArchives.filter((_: any, i: number) => i !== fileIdx);
-                                                                            setValue(`requestedData.${idx}.digitalArchives`, updated);
-                                                                        }}
-                                                                        className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer"
-                                                                        title="Hapus berkas"
-                                                                    >
-                                                                        <X className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </div>
-                                                            ))}
+                                        {watch('files') && watch('files').length > 0 && (
+                                            <div className="mt-3 space-y-2">
+                                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Berkas Terlampir ({watch('files').length})
+                                                </p>
+                                                <div className="divide-y divide-slate-100 border border-slate-200 rounded-sm bg-white overflow-hidden">
+                                                    {watch('files').map((fileUrl: string, fileIdx: number) => (
+                                                        <div key={fileIdx} className="flex items-center justify-between p-2.5 text-xs">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <Paperclip className="w-3.5 h-3.5 text-[#00a389] shrink-0" />
+                                                                <span className="truncate font-medium text-slate-700">{`Berkas Persyaratan #${fileIdx + 1}`}</span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const current = watch('files') || [];
+                                                                    setValue('files', current.filter((_, i) => i !== fileIdx));
+                                                                }}
+                                                                className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer"
+                                                                title="Hapus berkas"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
-                            ))}
+                            </div>
                         </div>
                     )}
 
@@ -578,25 +495,35 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Nomor Pemohonan</p>
+                                    <p className="text-slate-500 font-semibold capitalize">Nomor Permohonan</p>
                                     <p className="font-bold text-slate-800 text-sm">
-                                        {watch('applicationNumber') || '-'}
+                                        {watch('applicationId') || '-'}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Jumlah NOP Asal</p>
+                                    <p className="text-slate-500 font-semibold capitalize">Nomor SmartGov</p>
+                                    <p className="font-bold text-slate-800 text-sm">
+                                        {watch('smartgovId') || '-'}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
+                                    <p className="text-slate-500 font-semibold capitalize">Nama Wajib Pajak Pemohon</p>
+                                    <p className="font-bold text-slate-800 text-sm">
+                                        {watch('taxSubject.name') || '-'}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
+                                    <p className="text-slate-500 font-semibold capitalize">NOP Asal</p>
                                     <p className="font-bold text-slate-800 text-sm">
                                         {isNoComplementary
-                                            ? isNewTaxObject
-                                                ? '0 (Objek Pajak Baru)'
-                                                : '0 (Pengaktifan NOP)'
-                                            : `${compFields.length} NOP`}
+                                            ? '0 (Tanpa NOP Asal)'
+                                            : `${compFields.length} Objek Pajak Asal`}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-sm border border-slate-200 space-y-1">
-                                    <p className="text-slate-500 font-semibold capitalize">Jumlah NOP Dimohon</p>
+                                    <p className="text-slate-500 font-semibold capitalize">Berkas Terlampir</p>
                                     <p className="font-bold text-slate-800 text-sm">
-                                        {reqFields.length} NOP
+                                        {watch('files')?.length || 0} Berkas
                                     </p>
                                 </div>
                             </div>

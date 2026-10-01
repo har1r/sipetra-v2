@@ -1,9 +1,3 @@
-// =========================================================================
-// APPLICATION, BUNDLE, AND MANIFEST MANAGEMENT SYSTEM
-// Database: MongoDB
-// Principles: Flexible (Reuse), Trackable (Immutable History), Strict Control
-// =========================================================================
-
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
@@ -11,17 +5,6 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-}
-
-// ========================== ENUMS ==========================
-
-enum UserRole {
-  DATA_ENTRY
-  RESEARCHER
-  ARCHIVIST
-  SENDER
-  MONITOR
-  SUPERVISOR
 }
 
 enum ApplicationType {
@@ -35,272 +18,243 @@ enum ApplicationType {
   MERGER_AND_PARTIAL_MUTATION
 }
 
+enum UserRole {
+  FRONT_OFFICER
+  VERIFICATOR
+  HEAD_OF_ADMINISTRATIVE_OFFICE
+  HEAD_OF_OFFICE
+  DELIVERY_OFFICER
+  CENTRAL_OFFICER
+}
+
+enum ApplicationRevision {
+  EXTERNAL_REVISION
+  INTERNAL_REVISION
+}
+
 enum ApplicationStatus {
   SUBMITTED
-  BUNDLED
-  ARCHIVED
-  MANIFESTED
-  DELIVERED
+  VERIFYING
+  ADMINISTRATIVE_OFFICE_HEAD_APPROVING
+  OFFICE_HEAD_APPROVING
+  DELIVERING
+  CENTRAL_OFFICE_PROCESSING
   COMPLETED
-  REVISION
+  EXTERNAL_REVISION
+  INTERNAL_REVISION
+  EXPIRED
 }
 
-enum BundleStatus {
-  DRAFT
-  LOCKED
-  IN_MANIFEST
+enum ApplicationResult {
+  APPROVED
+  REJECTED
 }
 
-enum ManifestStatus {
-  DRAFT
-  LOCKED
-  SENT
-}
-
-enum DigitalArchiveStatus {
-  ACTIVE
-  SUPERSEDED
+enum SubmissionChannel {
+  FRONT_OFFICER
+  ONLINE_PORTAL
 }
 
 enum AuditAction {
-  CREATE
-  UPDATE_STATUS
-  ADD_TO_BUNDLE
-  REMOVE_FROM_BUNDLE
-  LOCK_BUNDLE
-  UNLOCK_BUNDLE
-  ADD_TO_MANIFEST
-  REMOVE_FROM_MANIFEST
-  LOCK_MANIFEST
-  SEND_MANIFEST
-  TRIGGER_RETURN
-  APPROVE_RETURN
-  REJECT_RETURN
-  UPLOAD_DOCUMENT
-  SUBMIT_DATA
-  REVISE_DATA
+  SUBMIT
+  CLAIM
+  VERIFY_APPROVE
+  REQUEST_INTERNAL_REVISION
+  REQUEST_EXTERNAL_REVISION
+  RESUBMIT_REVISION
+  PARAF_ADMINISTRATIVE_HEAD
+  SIGN_OFFICE_HEAD
+  DISPATCH_DELIVERY
+  PROCESS_CENTRAL
+  COMPLETE
+  NOTIFY_WP
+  EXPIRE
+  SLA_RECALCULATED
 }
-
-enum ReturnOrigin {
-  ARCHIVIST
-  SENDER
-  HEADQUARTERS
-}
-
-enum ReturnStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  EXECUTED
-}
-
-// ========================== MODELS ==========================
 
 model User {
-  id                     String     @id @default(auto()) @map("_id") @db.ObjectId
-  name                   String
-  email                  String     @unique
-  passwordHash           String
-  role                   UserRole
-  isActive               Boolean    @default(true)
-  createdAt              DateTime   @default(now())
-  updatedAt              DateTime   @updatedAt
+  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  email                 String        @unique
+  passwordHash          String
+  role                  UserRole
+  isActive              Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
-  createdApplications    Application[]
-  createdBundles         Bundle[]
-  createdManifests       Manifest[]
-
-  auditLogs              AuditLog[]
-  
-  applicationSnapshots   ApplicationSnapshot[]
-  bundleSnapshots        BundleSnapshot[]
-  manifestSnapshots      ManifestSnapshot[]
+  auditLogs             AuditLog[]
+  createdBundles        Bundle[]
+  submittedApplications Application[] @relation("FrontOfficerApplications")
+  verifiedApplications  Application[] @relation("VerificatorApplications")
 }
 
 model Application {
-  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
-  applicationType      ApplicationType
-  applicationNumber    String             @unique
-  serviceNumberDate    DateTime           @default(now())
-  completionDate       DateTime 
-  complementaryData    ComplementaryData[]
-  requestedData        RequestedData[]       
-  status               ApplicationStatus  @default(SUBMITTED)
-  isFavorite           Boolean            @default(false)
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  createdById          String?            @db.ObjectId
-  currentBundleId      String?            @db.ObjectId  
+  id                  String              @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId       String              @unique
+  applicationType     ApplicationType
 
-  createdBy            User?              @relation(fields: [createdById], references: [id])
-  currentBundle        Bundle?            @relation(fields: [currentBundleId], references: [id])
-  snapshots            ApplicationSnapshot[]
+  smartgovId          String
+  smartgovCreatedAt   DateTime            @default(now())
+  smartgovCompletedAt DateTime?
+
+  complementary       ComplementaryData[]
+  taxSubject          TaxSubjectData
+  taxObject           TaxObjectData
+
+  status              ApplicationStatus   @default(SUBMITTED)
+  submissionChannel   SubmissionChannel   @default(FRONT_OFFICER)
+  isFavorite          Boolean             @default(false)
+
+  sla                 SlaData?
+  revisions           Revision[]
+
+  frontOfficerId      String?             @db.ObjectId
+  frontOfficer        User?               @relation("FrontOfficerApplications", fields: [frontOfficerId], references: [id])
+
+  verificatorId       String?             @db.ObjectId
+  verificator         User?               @relation("VerificatorApplications", fields: [verificatorId], references: [id])
+
+  bundleId            String?             @db.ObjectId
+  bundle              Bundle?             @relation(fields: [bundleId], references: [id])
+
+  auditLogs           AuditLog[]
+
+  files               String[]
+  resultFiles         String[]
+  note                String?
+
+  result              ApplicationResult?
+  completedAt         DateTime?
+  notifiedToWpAt      DateTime?
+
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([status])
+  @@index([verificatorId, status])
+  @@index([frontOfficerId, status])
+  @@index([smartgovId])
 }
 
-type TaxSubjectData {
-  name                String?
-  whatsappNumber      String?
-  address             String?
-  block               String?
-  neighborhoodUnit    String?
-  communityUnit       String?
-  subdistrict         String?
-  village             String?
-}
+model AuditLog {
+  id             String             @id @default(auto()) @map("_id") @db.ObjectId
 
-type TaxObjectData {
-  nop                 String?
-  nopTemporary        String?
-  address             String?
-  block               String?
-  neighborhoodUnit    String?
-  communityUnit       String?
-  subdistrict         String?
-  village             String?
-  landArea            Float?
-  buildingArea        Float?
-  certificate         String?
-}
+  applicationId  String             @db.ObjectId
+  application    Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-type ComplementaryData {
-  taxSubjectData          TaxSubjectData
-  taxObjectData           TaxObjectData
-  isPrimary           Boolean         @default(false)
-}
+  actorId        String?            @db.ObjectId
+  actorName      String?
+  actorRole      UserRole?
+  actor          User?              @relation(fields: [actorId], references: [id])
 
-type RequestedData {
-  idRequestedData     String          @default(uuid())
-  taxSubjectData      TaxSubjectData
-  taxObjectData       TaxObjectData
-  isVerified          Boolean         @default(false)
-  isArchived          Boolean         @default(false)
-  nopFinal            String?
-  notes               String?
-  digitalArchives     DigitalArchive[]
-}
+  action         AuditAction
+  previousStatus ApplicationStatus?
+  newStatus      ApplicationStatus
 
-type DigitalArchive {
-  idArchive       String                @default(uuid())
-  urlBlob         String
-  fileName        String?  
-  status          DigitalArchiveStatus  @default(ACTIVE)
-  uploadedBy      String?               @db.ObjectId 
-  createdAt       DateTime              @default(now())
-  revisionNote    String?               
-  supersededBy    String?               
-  supersededAt    DateTime?             
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([applicationId, createdAt])
 }
 
 model Bundle {
-  id                String          @id @default(auto()) @map("_id") @db.ObjectId
-  bundleNumber      String          @unique
-  applicationType   ApplicationType 
-  status            BundleStatus    @default(DRAFT)
-  currentManifestId String?         @db.ObjectId 
-  createdById       String?         @db.ObjectId
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  bundleId     String        @unique
+  note         String?
 
-  createdBy         User?           @relation(fields: [createdById], references: [id])
-  bundleDocuments   DocumentContainer[] 
-  currentManifest   Manifest?                   @relation(fields: [currentManifestId], references: [id])
-  applications      Application[]             
-  returnRequests    ReturnRequest[]
-  snapshots         BundleSnapshot[]
+  applications Application[]
+
+  createdById  String?       @db.ObjectId
+  createdBy    User?         @relation(fields: [createdById], references: [id])
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
-model Manifest {
-  id                String          @id @default(auto()) @map("_id") @db.ObjectId
-  manifestNumber    String          @unique
-  signedReceiptUrl  String?         
-  status            ManifestStatus  @default(DRAFT)
-  createdById       String?         @db.ObjectId
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-
-  createdBy         User?           @relation(fields: [createdById], references: [id])
-  manifestDocuments DocumentContainer[] 
-  bundles           Bundle[]       
-  returnRequests    ReturnRequest[]
-  snapshots         ManifestSnapshot[]
-
-  @@index([createdAt])
+model Holiday {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  date        DateTime @unique
+  type        String
+  description String?
+  createdAt   DateTime @default(now())
 }
 
-type DocumentContainer {
-  idDocument    String   @default(uuid())
-  documentType  String   
-  urlBlob       String
-  fileName      String?
-  uploadedBy    String?  @db.ObjectId
-  createdAt     DateTime @default(now())
+type TaxSubjectData {
+  name             String?
+  whatsappNumber   String?
+  address          String?
+  block            String?
+  neighborhoodUnit String?
+  communityUnit    String?
+  subdistrict      String?
+  village          String?
 }
 
-// ========================== TRACKABILITY & RETURN ==========================
-
-model AuditLog {
-  id          String      @id @default(auto()) @map("_id") @db.ObjectId
-  action      AuditAction 
-  entityType  String      // "APPLICATION", "BUNDLE", or "MANIFEST"
-  entityId    String      @db.ObjectId
-  oldStatus   String?     
-  newStatus   String?     
-  metadata    Json?       
-  createdAt   DateTime    @default(now())
-  actorId     String      @db.ObjectId
-  actor       User        @relation(fields: [actorId], references: [id])
+type TaxObjectData {
+  nop              String?
+  nopTemporary     String?
+  address          String?
+  block            String?
+  neighborhoodUnit String?
+  communityUnit    String?
+  subdistrict      String?
+  village          String?
+  landArea         Float?
+  buildingArea     Float?
+  certificate      String?
 }
 
-model ReturnRequest {
-  id            String       @id @default(auto()) @map("_id") @db.ObjectId
-  origin        ReturnOrigin 
-  triggeredBy   String       @db.ObjectId 
-  reason        String
-  status        ReturnStatus @default(PENDING)
-  approvedBy    String?      @db.ObjectId 
-  approvedAt    DateTime?
-  rejectionNote String?      
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  
-  bundleId      String?      @db.ObjectId
-  bundle        Bundle?      @relation(fields: [bundleId], references: [id])
-  manifestId    String?      @db.ObjectId
-  manifest      Manifest?    @relation(fields: [manifestId], references: [id])
+type ComplementaryData {
+  taxSubjectData TaxSubjectData
+  taxObjectData  TaxObjectData
 }
 
-model ApplicationSnapshot {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  applicationId  String         @db.ObjectId
-  snapshotData   Json           
-  snapshotType   String         
-  note           String?        
-  actorId        String         @db.ObjectId
-  createdAt      DateTime       @default(now())
-  actor          User           @relation(fields: [actorId], references: [id])
-  application    Application    @relation(fields: [applicationId], references: [id])
+type Revision {
+  id             String
+  type           ApplicationRevision
+  reason         String
+  fromStatus     ApplicationStatus?
+  files          String[]
+
+  authorId       String?             @db.ObjectId
+  authorName     String?
+  authorRole     UserRole?
+  createdAt      DateTime
+
+  resolvedById   String?             @db.ObjectId
+  resolvedByName String?
+  resolvedAt     DateTime?
 }
 
-model BundleSnapshot {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  bundleId       String         @db.ObjectId
-  snapshotData   Json           
-  snapshotType   String         
-  note           String?        
-  actorId        String         @db.ObjectId
-  createdAt      DateTime       @default(now())
-  actor          User           @relation(fields: [actorId], references: [id])
-  bundle         Bundle         @relation(fields: [bundleId], references: [id])
+type SlaData {
+  totalStartedAt           DateTime?
+  totalDeadline            DateTime?
+  overdueAt                DateTime?
+
+  isPaused                 Boolean      @default(false)
+  pausedAt                 DateTime?
+  pauses                   SlaPause[]
+
+  currentStageStartedAt    DateTime?
+  currentStageDeadline     DateTime?
+  currentStageMinutesLimit Int?
+
+  stageVisits              StageVisit[]
+
+  externalResubmitCount    Int          @default(0)
+  expiresAt                DateTime?
 }
 
-model ManifestSnapshot {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  manifestId     String         @db.ObjectId
-  snapshotData   Json           
-  snapshotType   String         
-  note           String?        
-  actorId        String         @db.ObjectId
-  createdAt      DateTime       @default(now())
-  actor          User           @relation(fields: [actorId], references: [id])
-  manifest       Manifest       @relation(fields: [manifestId], references: [id])
+type SlaPause {
+  from   DateTime
+  to     DateTime?
+  reason String?
+}
+
+type StageVisit {
+  stage       ApplicationStatus
+  startedAt   DateTime
+  completedAt DateTime?
+  actorId     String?           @db.ObjectId
+  reason      String?
 }
