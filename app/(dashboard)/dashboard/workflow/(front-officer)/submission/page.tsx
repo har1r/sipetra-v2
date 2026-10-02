@@ -7,11 +7,11 @@ import { Plus } from 'lucide-react';
 import { ApplicationDataTable } from '@/features/front-officer/components/ApplicationDataTable';
 
 export const metadata = {
-  title: 'Pengajuan Permohonan Front Officer — SIPETRA Architax',
+  title: 'Pengajuan Permohonan (Submission) — SIPETRA Architax',
   description: 'Daftar permohonan yang diajukan dan draf pengajuan baru.',
 };
 
-export default async function FrontOfficerPengajuanPage() {
+export default async function WorkflowSubmissionPage() {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user) {
@@ -37,7 +37,7 @@ export default async function FrontOfficerPengajuanPage() {
         </div>
 
         <Link
-          href="/dashboard/front-officer/applications/new"
+          href="/dashboard/workflow/applications/new"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00a389] hover:bg-[#008670] text-white font-semibold text-sm rounded-sm shadow-xs transition-all cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />

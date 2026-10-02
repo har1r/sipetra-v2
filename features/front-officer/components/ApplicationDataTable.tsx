@@ -18,9 +18,20 @@ import {
     Plus,
     Pencil,
     Copy,
+    Star,
+    Printer,
+    X,
+    PackagePlus,
+    PackageMinus,
+    Layers,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '../schemas/application.schema';
 import { formatNopInput, formatShortDate } from '@/lib/utils';
+import { toggleApplicationFavorite, getApplicationReceipt } from '../actions/application.actions';
+import { removeApplicationFromBundle } from '@/features/verificator/actions/bundle.actions';
+import { AssignBundleModal } from '@/features/verificator/components/AssignBundleModal';
 
 export interface ApplicationItem {
     id: string;
@@ -28,7 +39,15 @@ export interface ApplicationItem {
     smartgovId?: string | null;
     applicationType: ApplicationTypeEnum;
     status: string;
+    isFavorite?: boolean;
     requestedNop?: string | null;
+    bundleId?: string | null;
+    bundle?: {
+        id: string;
+        bundleId: string;
+        name?: string | null;
+        note?: string | null;
+    } | null;
     taxSubject?: {
         name?: string;
         whatsappNumber?: string;
@@ -60,11 +79,81 @@ interface ApplicationDataTableProps {
 }
 
 export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER', renderActions }: ApplicationDataTableProps) {
+    const router = useRouter();
+    const { data: session } = useSession();
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [selectedType, setSelectedType] = useState<string>('ALL');
     const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
     const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [favoriteState, setFavoriteState] = useState<Record<string, boolean>>({});
+    const [loadingFavoriteId, setLoadingFavoriteId] = useState<string | null>(null);
+    const [receiptApp, setReceiptApp] = useState<any | null>(null);
+    const [isReceiptLoading, setIsReceiptLoading] = useState<boolean>(false);
+    const [assignModalApp, setAssignModalApp] = useState<ApplicationItem | null>(null);
+    const [loadingBundleAppId, setLoadingBundleAppId] = useState<string | null>(null);
+
+    const isFrontOfficer = session?.user?.role === 'FRONT_OFFICER' || actionRole === 'FRONT_OFFICER';
+
+    const handleOpenReceipt = async (app: ApplicationItem) => {
+        setIsReceiptLoading(true);
+        setReceiptApp(app);
+        try {
+            const res = await getApplicationReceipt(app.id);
+            if (res.success && res.data) {
+                setReceiptApp(res.data);
+            }
+        } catch {
+            setReceiptApp(app);
+        } finally {
+            setIsReceiptLoading(false);
+        }
+    };
+
+    const formatFullReceiptDate = (dateVal?: Date | string | null) => {
+        if (!dateVal) return '-';
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }) + ' WIB';
+    };
+
+    const getIsFavorite = (app: ApplicationItem) => {
+        if (favoriteState[app.id] !== undefined) {
+            return favoriteState[app.id];
+        }
+        return Boolean(app.isFavorite);
+    };
+
+    const handleToggleFavorite = async (e: React.MouseEvent, app: ApplicationItem) => {
+        e.stopPropagation();
+        if (!isFrontOfficer || loadingFavoriteId === app.id) return;
+
+        const currentVal = getIsFavorite(app);
+        const nextVal = !currentVal;
+
+        setFavoriteState((prev) => ({ ...prev, [app.id]: nextVal }));
+        setLoadingFavoriteId(app.id);
+
+        try {
+            const res = await toggleApplicationFavorite(app.id, nextVal);
+            if (!res.success) {
+                setFavoriteState((prev) => ({ ...prev, [app.id]: currentVal }));
+            } else {
+                router.refresh();
+            }
+        } catch {
+            setFavoriteState((prev) => ({ ...prev, [app.id]: currentVal }));
+        } finally {
+            setLoadingFavoriteId(null);
+        }
+    };
 
     const typeOptions = [
         { key: 'ALL', label: 'Semua Jenis' },
@@ -130,11 +219,34 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
         return <span className="text-xs text-slate-700 font-medium">{formatShortDate(dateVal)}</span>;
     };
 
+    const handleRemoveFromBundle = async (app: ApplicationItem) => {
+        const bundleCode = app.bundle?.bundleId || 'ini';
+        if (!window.confirm(`Apakah Anda yakin ingin mengeluarkan permohonan #${app.applicationId} dari Bundle ${bundleCode}?`)) {
+            return;
+        }
+
+        setLoadingBundleAppId(app.id);
+        try {
+            const res = await removeApplicationFromBundle(app.id);
+            if (res.success) {
+                router.refresh();
+            } else {
+                alert(res.message || 'Gagal mengeluarkan permohonan dari bundle.');
+            }
+        } catch (err) {
+            console.error('Error removing application from bundle:', err);
+        } finally {
+            setLoadingBundleAppId(null);
+        }
+    };
+
     const renderActionDropdown = (app: ApplicationItem) => {
         if (renderActions) return renderActions(app);
 
         const isMenuOpen = openMenuId === app.id;
         const isEditable = app.status === 'SUBMITTED' || app.status === 'REVISION';
+        const inBundle = Boolean(app.bundleId || app.bundle);
+        const isVerificator = actionRole === 'VERIFICATOR';
 
         return (
             <div className="relative inline-block text-left">
@@ -162,33 +274,89 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                             }}
                         />
                         <div
-                            className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150 text-left"
+                            className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150 text-left"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {isEditable ? (
-                                <Link
-                                    href={`/dashboard/front-officer/applications/${app.id}/edit`}
-                                    onClick={() => setOpenMenuId(null)}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#00a389] transition-colors"
-                                >
-                                    <Pencil className="w-3.5 h-3.5 text-slate-500" />
-                                    <span>Edit Permohonan</span>
-                                </Link>
-                            ) : (
-                                <span className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-300 cursor-not-allowed">
-                                    <Pencil className="w-3.5 h-3.5 text-slate-300" />
-                                    <span>Edit Terkunci</span>
-                                </span>
-                            )}
+                            {isVerificator ? (
+                                <>
+                                    {!inBundle ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setOpenMenuId(null);
+                                                setAssignModalApp(app);
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                                        >
+                                            <PackagePlus className="w-3.5 h-3.5 text-[#00a389]" />
+                                            <span>Masukkan ke Bundle</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            disabled={loadingBundleAppId === app.id}
+                                            onClick={() => {
+                                                setOpenMenuId(null);
+                                                handleRemoveFromBundle(app);
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer disabled:opacity-50"
+                                        >
+                                            <PackageMinus className="w-3.5 h-3.5 text-amber-600" />
+                                            <span>
+                                                {loadingBundleAppId === app.id ? 'Mengeluarkan...' : 'Keluarkan dari Bundle'}
+                                            </span>
+                                        </button>
+                                    )}
 
-                            <Link
-                                href={`/dashboard/front-officer/applications/${app.id}/duplicate`}
-                                onClick={() => setOpenMenuId(null)}
-                                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#00a389] transition-colors border-t border-slate-100"
-                            >
-                                <Copy className="w-3.5 h-3.5 text-slate-500" />
-                                <span>Duplikasi Permohonan</span>
-                            </Link>
+                                    <Link
+                                        href={`/dashboard/workflow/applications/${app.id}/edit`}
+                                        onClick={() => setOpenMenuId(null)}
+                                        className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors border-t border-slate-100"
+                                    >
+                                        <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                                        <span>Edit Permohonan</span>
+                                    </Link>
+                                </>
+                            ) : (
+                                <>
+                                    {isEditable ? (
+                                        <Link
+                                            href={`/dashboard/workflow/applications/${app.id}/edit`}
+                                            onClick={() => setOpenMenuId(null)}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                                            <span>Edit Permohonan</span>
+                                        </Link>
+                                    ) : (
+                                        <span className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-400 cursor-not-allowed">
+                                            <Pencil className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>Edit Terkunci</span>
+                                        </span>
+                                    )}
+
+                                    <Link
+                                        href={`/dashboard/workflow/applications/${app.id}/duplicate`}
+                                        onClick={() => setOpenMenuId(null)}
+                                        className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors border-t border-slate-100"
+                                    >
+                                        <Copy className="w-3.5 h-3.5 text-slate-600" />
+                                        <span>Duplikasi Permohonan</span>
+                                    </Link>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setOpenMenuId(null);
+                                            handleOpenReceipt(app);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors border-t border-slate-100 cursor-pointer"
+                                    >
+                                        <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                        <span>Cetak Bukti</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </>
                 )}
@@ -383,7 +551,7 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                         </button>
                     ) : (
                         <Link
-                            href="/dashboard/applications/new"
+                            href="/dashboard/workflow/applications/new"
                             className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a389] hover:bg-[#008670] text-white text-xs font-semibold rounded-sm transition-colors shadow-xs"
                         >
                             <Plus className="w-3.5 h-3.5" /> Buat Permohonan Baru
@@ -417,18 +585,45 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                 key={app.id}
                                 className="bg-white rounded-sm border border-slate-200/80 p-4 py-3 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6"
                             >
-                                <div className="space-y-1 min-w-[170px]">
-                                    <h3 className="text-xs font-bold text-slate-900 tracking-tight">
-                                        {applicantName}
-                                    </h3>
-                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                                        <span className="flex items-center gap-1" title="Luas Tanah">
-                                            <span className="text-slate-400 font-semibold">LT:</span> {landArea} m²
-                                        </span>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="flex items-center gap-1" title="Luas Bangunan">
-                                            <span className="text-slate-400 font-semibold">LB:</span> {buildingArea} m²
-                                        </span>
+                                <div className="flex items-center gap-3 min-w-[200px]">
+                                    <button
+                                        type="button"
+                                        disabled={!isFrontOfficer || loadingFavoriteId === app.id}
+                                        onClick={(e) => handleToggleFavorite(e, app)}
+                                        className={`p-1.5 rounded-sm transition-colors shrink-0 ${
+                                            isFrontOfficer ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-80'
+                                        } ${
+                                            getIsFavorite(app)
+                                                ? 'text-amber-500'
+                                                : 'text-slate-300 hover:text-amber-400'
+                                        }`}
+                                        title={
+                                            !isFrontOfficer
+                                                ? (getIsFavorite(app) ? 'Permohonan Prioritas / Favorit' : 'Bukan Favorit')
+                                                : (getIsFavorite(app) ? 'Hapus dari Favorit' : 'Tandai sebagai Favorit')
+                                        }
+                                    >
+                                        <Star
+                                            className={`w-4 h-4 transition-transform ${
+                                                getIsFavorite(app)
+                                                    ? 'fill-amber-400 text-amber-500 scale-110'
+                                                    : 'text-slate-300 hover:text-amber-400'
+                                            }`}
+                                        />
+                                    </button>
+                                    <div className="space-y-1">
+                                        <h3 className="text-xs font-bold text-slate-900 tracking-tight">
+                                            {applicantName}
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                                            <span className="flex items-center gap-1" title="Luas Tanah">
+                                                <span className="text-slate-400 font-semibold">LT:</span> {landArea} m²
+                                            </span>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="flex items-center gap-1" title="Luas Bangunan">
+                                                <span className="text-slate-400 font-semibold">LB:</span> {buildingArea} m²
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -526,10 +721,19 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                 <div className="hidden lg:block h-7 w-px bg-slate-200/80" />
 
                                 <div className="flex items-center gap-4 justify-end w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                                    <div>
+                                    <div className="flex items-center gap-1.5">
                                         <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-xs">
                                             #{app.applicationId}
                                         </span>
+                                        {app.bundle && (
+                                            <span
+                                                className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-[#008670] bg-[#00a389]/10 border border-[#00a389]/30 px-1.5 py-0.5 rounded-xs"
+                                                title={`Bundle: ${app.bundle.name || app.bundle.bundleId}`}
+                                            >
+                                                <Layers className="w-3 h-3 text-[#00a389]" />
+                                                {app.bundle.bundleId}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {renderActionDropdown(app)}
@@ -546,6 +750,10 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                             <thead>
                                 <tr className="bg-slate-50/80 text-[11px] font-bold text-slate-600 border-b border-slate-200/80">
                                     <th className="py-2.5 px-3 whitespace-nowrap text-center w-10">No.</th>
+                                    <th className="py-2.5 px-2 whitespace-nowrap text-center w-8">
+                                        <span className="sr-only">Favorit</span>
+                                        <Star className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                                    </th>
                                     <th className="py-2.5 px-3.5 whitespace-nowrap">No. Permohonan</th>
                                     <th className="py-2.5 px-3.5 whitespace-nowrap">SmartGov ID</th>
                                     <th className="py-2.5 px-3.5 whitespace-nowrap">Nama Pemohon</th>
@@ -581,8 +789,47 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                                 {index + 1}
                                             </td>
 
+                                            <td className="py-2.5 px-2 whitespace-nowrap text-center">
+                                                <button
+                                                    type="button"
+                                                    disabled={!isFrontOfficer || loadingFavoriteId === app.id}
+                                                    onClick={(e) => handleToggleFavorite(e, app)}
+                                                    className={`p-1 rounded-sm transition-colors inline-flex items-center justify-center ${
+                                                        isFrontOfficer ? 'cursor-pointer hover:bg-slate-100' : 'cursor-default opacity-80'
+                                                    } ${
+                                                        getIsFavorite(app)
+                                                            ? 'text-amber-500'
+                                                            : 'text-slate-300 hover:text-amber-400'
+                                                    }`}
+                                                    title={
+                                                        !isFrontOfficer
+                                                            ? (getIsFavorite(app) ? 'Permohonan Prioritas / Favorit' : 'Bukan Favorit')
+                                                            : (getIsFavorite(app) ? 'Hapus dari Favorit' : 'Tandai sebagai Favorit')
+                                                    }
+                                                >
+                                                    <Star
+                                                        className={`w-3.5 h-3.5 transition-transform ${
+                                                            getIsFavorite(app)
+                                                                ? 'fill-amber-400 text-amber-500 scale-110'
+                                                                : 'text-slate-300 hover:text-amber-400'
+                                                        }`}
+                                                    />
+                                                </button>
+                                            </td>
+
                                             <td className="py-2.5 px-3.5 whitespace-nowrap font-bold text-slate-800 text-xs">
-                                                #{app.applicationId}
+                                                <div className="flex items-center gap-1.5">
+                                                    <span>#{app.applicationId}</span>
+                                                    {app.bundle && (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-[#008670] bg-[#00a389]/10 border border-[#00a389]/30 px-1.5 py-0.5 rounded-xs"
+                                                            title={`Bundle: ${app.bundle.name || app.bundle.bundleId}`}
+                                                        >
+                                                            <Layers className="w-3 h-3 text-[#00a389]" />
+                                                            {app.bundle.bundleId}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
 
                                             <td className="py-2.5 px-3.5 whitespace-nowrap">
@@ -649,6 +896,239 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                         </table>
                     </div>
                 </div>
+            )}
+
+            {/* MODAL PREVIEW BUKTI PENERIMAAN PELAYANAN */}
+            {receiptApp && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+                    <div
+                        className="fixed inset-0 no-print"
+                        onClick={() => setReceiptApp(null)}
+                    />
+
+                    <div className="relative bg-white rounded-md shadow-2xl max-w-2xl w-full my-6 overflow-hidden border border-slate-200 z-10 animate-in zoom-in-95 duration-150">
+                        {/* Control bar */}
+                        <div className="no-print flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+                            <div className="flex items-center gap-2">
+                                <Printer className="w-4 h-4 text-slate-700" />
+                                <span className="text-xs font-bold text-slate-800">
+                                    Pratinjau Bukti Penerimaan Pelayanan
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#00a389] hover:bg-[#008670] text-white text-xs font-semibold rounded-sm shadow-xs transition-colors cursor-pointer"
+                                >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    Cetak Dokumen
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setReceiptApp(null)}
+                                    className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-sm transition-colors cursor-pointer"
+                                    title="Tutup"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Printable Receipt Paper */}
+                        <div id="printable-receipt-area" className="p-8 text-slate-900 bg-white font-sans text-xs select-text">
+                            {/* KOP RESMI */}
+                            <div className="text-center pb-3 border-b-2 border-slate-900 space-y-0.5">
+                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                                    Pemerintah Kabupaten / Kota — Badan Pendapatan Daerah
+                                </h4>
+                                <h2 className="text-base font-extrabold uppercase tracking-tight text-slate-950">
+                                    Sistem Informasi Pelayanan Pajak Daerah (SIPETRA)
+                                </h2>
+                                <p className="text-[11px] font-semibold text-slate-600">
+                                    Tanda Terima Berkas Pelayanan Pajak Bumi dan Bangunan (PBB-P2)
+                                </p>
+                            </div>
+
+                            {/* JUDUL DOKUMEN */}
+                            <div className="text-center my-4">
+                                <span className="inline-block px-3 py-1 bg-slate-100 border border-slate-300 rounded-sm font-extrabold text-xs uppercase tracking-wider text-slate-900">
+                                    Bukti Penerimaan Pelayanan Sementara
+                                </span>
+                            </div>
+
+                            {/* NOMOR & TANGGAL */}
+                            <div className="grid grid-cols-2 gap-4 py-2 border-y border-slate-200 mb-4 bg-slate-50/50 px-3 rounded-sm">
+                                <div>
+                                    <span className="block text-[10px] uppercase font-bold text-slate-400">
+                                        Nomor Permohonan (SIPETRA)
+                                    </span>
+                                    <span className="font-mono text-sm font-bold text-slate-950">
+                                        #{receiptApp.applicationId}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-[10px] uppercase font-bold text-slate-400">
+                                        Tanggal & Waktu Diterima
+                                    </span>
+                                    <span className="font-semibold text-slate-800">
+                                        {formatFullReceiptDate(receiptApp.createdAt)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* DATA PERMOHONAN */}
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 border-b border-slate-200 pb-1">
+                                        A. Data Wajib Pajak (Pemohon)
+                                    </h4>
+                                    <table className="w-full text-xs">
+                                        <tbody>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 w-44 font-semibold text-slate-600">Nama Pemohon</td>
+                                                <td className="py-1.5 font-bold text-slate-900">
+                                                    {receiptApp.taxSubject?.name || '-'}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 font-semibold text-slate-600">Nomor WhatsApp / HP</td>
+                                                <td className="py-1.5 text-slate-800 font-mono">
+                                                    {receiptApp.taxSubject?.whatsappNumber || '-'}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td className="py-1.5 font-semibold text-slate-600">Alamat Pemohon</td>
+                                                <td className="py-1.5 text-slate-800">
+                                                    {receiptApp.taxSubject?.address || '-'}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 border-b border-slate-200 pb-1">
+                                        B. Data Objek Pajak & Layanan
+                                    </h4>
+                                    <table className="w-full text-xs">
+                                        <tbody>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 w-44 font-semibold text-slate-600">Nomor Objek Pajak (NOP)</td>
+                                                <td className="py-1.5 font-mono font-bold text-slate-900">
+                                                    {receiptApp.requestedNop
+                                                        ? formatNopInput(receiptApp.requestedNop)
+                                                        : receiptApp.taxObject?.nop
+                                                        ? formatNopInput(receiptApp.taxObject.nop)
+                                                        : '-'}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 font-semibold text-slate-600">Jenis Permohonan</td>
+                                                <td className="py-1.5 font-semibold text-slate-900">
+                                                    {APPLICATION_TYPE_UI[receiptApp.applicationType as ApplicationTypeEnum]?.title || receiptApp.applicationType}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 font-semibold text-slate-600">Luas Tanah (LT)</td>
+                                                <td className="py-1.5 font-semibold text-slate-800">
+                                                    {receiptApp.taxObject?.landArea != null ? `${receiptApp.taxObject.landArea} m²` : '-'}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b border-slate-100">
+                                                <td className="py-1.5 font-semibold text-slate-600">Luas Bangunan (LB)</td>
+                                                <td className="py-1.5 font-semibold text-slate-800">
+                                                    {receiptApp.taxObject?.buildingArea != null ? `${receiptApp.taxObject.buildingArea} m²` : '-'}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td className="py-1.5 font-semibold text-slate-600">Alamat Objek Pajak</td>
+                                                <td className="py-1.5 text-slate-800">
+                                                    {receiptApp.taxObject?.address || '-'}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* KOTAK KETENTUAN SLA & SMARTGOV */}
+                            <div className="my-5 p-3.5 bg-slate-50 border border-slate-300 rounded-sm space-y-1 text-slate-800">
+                                <h5 className="font-bold text-[11px] text-slate-900 uppercase tracking-wide">
+                                    Ketentuan Standar Pelayanan (SLA) & SmartGov:
+                                </h5>
+                                <p className="text-[11px] leading-relaxed text-slate-700">
+                                    Dokumen ini merupakan <strong>bukti penerimaan sementara yang berdurasi 10 hari sesuai Standar Layanan (SLA)</strong>. Berkas permohonan Anda akan diproses dan diverifikasi oleh petugas, baru nanti akan diberikan <strong>bukti pelayanan resmi dari SmartGov</strong>.
+                                </p>
+                            </div>
+
+                            {/* TANDA TANGAN */}
+                            <div className="grid grid-cols-2 gap-8 pt-4 mt-4 border-t border-slate-200 text-center">
+                                <div className="space-y-12">
+                                    <span className="block text-slate-600 font-medium text-[11px]">
+                                        Wajib Pajak / Pemohon,
+                                    </span>
+                                    <div>
+                                        <p className="font-bold text-slate-900 border-b border-slate-400 pb-1 inline-block min-w-[160px]">
+                                            {receiptApp.taxSubject?.name || '................................'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-12">
+                                    <span className="block text-slate-600 font-medium text-[11px]">
+                                        Petugas Loket Front Officer,
+                                    </span>
+                                    <div>
+                                        <p className="font-bold text-slate-900 border-b border-slate-400 pb-1 inline-block min-w-[160px]">
+                                            {receiptApp.frontOfficer?.name || session?.user?.name || 'Petugas Front Officer'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* FOOTER */}
+                            <div className="mt-8 pt-2 border-t border-dotted border-slate-300 text-center text-[10px] text-slate-400">
+                                Dicetak melalui Sistem SIPETRA Architax • Simpan lembar ini sebagai tanda bukti resmi penerimaan berkas
+                            </div>
+                        </div>
+                    </div>
+
+                    <style jsx global>{`
+                        @media print {
+                            body * {
+                                visibility: hidden !important;
+                            }
+                            #printable-receipt-area,
+                            #printable-receipt-area * {
+                                visibility: visible !important;
+                            }
+                            #printable-receipt-area {
+                                position: absolute !important;
+                                left: 0 !important;
+                                top: 0 !important;
+                                width: 100% !important;
+                                margin: 0 !important;
+                                padding: 24px !important;
+                                background: white !important;
+                                color: black !important;
+                                box-shadow: none !important;
+                                border: none !important;
+                            }
+                            .no-print {
+                                display: none !important;
+                            }
+                        }
+                    `}</style>
+                </div>
+            )}
+
+            {/* MODAL ASSIGN BUNDLE UNTUK VERIFIKATOR */}
+            {assignModalApp && (
+                <AssignBundleModal
+                    application={assignModalApp}
+                    onClose={() => setAssignModalApp(null)}
+                />
             )}
         </div>
     );

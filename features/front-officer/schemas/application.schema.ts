@@ -227,13 +227,6 @@ export const applicationCreateSchema = z
                         path: ['complementary', idx, 'taxObjectData', 'landArea'],
                     });
                 }
-                if (!cObject.certificate) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        message: 'Nomor Sertifikat/Keterangan Tanah wajib diisi',
-                        path: ['complementary', idx, 'taxObjectData', 'certificate'],
-                    });
-                }
             });
         }
 
@@ -268,9 +261,6 @@ export const applicationCreateSchema = z
         }
         if (object.landArea === undefined || object.landArea === null || object.landArea <= 0) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Luas tanah wajib diisi dan lebih dari 0 m²', path: ['taxObject', 'landArea'] });
-        }
-        if (object.buildingArea === undefined || object.buildingArea === null || object.buildingArea < 0) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Luas bangunan wajib diisi (isi 0 jika tanah kosong)', path: ['taxObject', 'buildingArea'] });
         }
         if (!object.certificate) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nomor Sertifikat/Keterangan Tanah wajib diisi', path: ['taxObject', 'certificate'] });

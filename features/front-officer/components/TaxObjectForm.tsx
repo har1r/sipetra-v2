@@ -44,7 +44,7 @@ export function TaxObjectForm({
     const reqNopErr = get(errors, 'requestedNop')?.message as string | undefined;
 
     const isLandAreaRequired = isRequestedData || !isNewOrReactivation;
-    const isCertRequired = isRequestedData || !isNewOrReactivation;
+    const isCertRequired = isRequestedData;
 
     return (
         <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 ${isFirstSection ? '' : 'border-t border-slate-200'}`}>
@@ -243,12 +243,7 @@ export function TaxObjectForm({
 
                     <div>
                         <label className="block text-xs font-semibold capitalize text-slate-700 mb-1.5">
-                            Luas Bangunan (m²){' '}
-                            {isRequestedData ? (
-                                <span className="text-rose-500">*</span>
-                            ) : (
-                                <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
-                            )}
+                            Luas Bangunan (m²) <span className="text-slate-800 font-normal ml-1">(Opsional)</span>
                         </label>
                         <div className="flex rounded-sm border border-slate-200 overflow-hidden bg-slate-50 focus-within:bg-white focus-within:border-[#00a389]">
                             <input

@@ -174,7 +174,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                 if (onSuccess) {
                     onSuccess(res.data);
                 }
-                router.push('/dashboard/front-officer/pengajuan');
+                router.push('/dashboard/workflow/submission');
                 router.refresh();
             } else {
                 setServerError(res.message || 'Gagal menyimpan permohonan.');

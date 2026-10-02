@@ -71,6 +71,11 @@ enum AuditAction {
   EXPIRE
   SLA_RECALCULATED
   DUPLICATE
+  TOGGLE_FAVORITE
+  EDIT
+  ASSIGN_BUNDLE
+  REMOVE_FROM_BUNDLE
+  CREATE_BUNDLE
 }
 
 model User {
@@ -162,6 +167,7 @@ model AuditLog {
 model Bundle {
   id           String        @id @default(auto()) @map("_id") @db.ObjectId
   bundleId     String        @unique
+  name         String?
   note         String?
 
   applications Application[]

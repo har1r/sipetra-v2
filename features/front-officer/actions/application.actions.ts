@@ -139,7 +139,8 @@ export async function createApplication(
             },
         });
 
-        revalidatePath('/dashboard/applications');
+        revalidatePath('/dashboard/workflow/submission');
+        revalidatePath('/dashboard/workflow/applications');
         revalidatePath('/dashboard');
 
         return {
@@ -195,6 +196,7 @@ export async function editApplication(
 
         const editableStatuses: ApplicationStatus[] = [
             ApplicationStatus.SUBMITTED,
+            ApplicationStatus.VERIFYING,
             ApplicationStatus.INTERNAL_REVISION,
             ApplicationStatus.EXTERNAL_REVISION,
         ];
@@ -272,7 +274,7 @@ export async function editApplication(
                 actorId: session.user.id,
                 actorName: session.user.name,
                 actorRole: session.user.role as UserRole,
-                action: existingApp.status === ApplicationStatus.SUBMITTED ? AuditAction.SUBMIT : AuditAction.RESUBMIT_REVISION,
+                action: existingApp.status === ApplicationStatus.SUBMITTED ? AuditAction.EDIT : AuditAction.RESUBMIT_REVISION,
                 previousStatus: existingApp.status,
                 newStatus: updatedApp.status,
                 metadata: {
@@ -282,8 +284,10 @@ export async function editApplication(
             },
         });
 
-        revalidatePath('/dashboard/applications');
-        revalidatePath(`/dashboard/applications/${id}`);
+        revalidatePath('/dashboard/workflow/submission');
+        revalidatePath('/dashboard/workflow/applications');
+        revalidatePath(`/dashboard/workflow/applications/${id}/edit`);
+        revalidatePath('/dashboard');
 
         return {
             success: true,
@@ -458,8 +462,9 @@ export async function duplicateApplication(
             },
         });
 
-        revalidatePath('/dashboard/applications');
-        revalidatePath('/dashboard/front-officer/pengajuan');
+        revalidatePath('/dashboard/workflow/submission');
+        revalidatePath('/dashboard/workflow/applications');
+        revalidatePath('/dashboard');
 
         return {
             success: true,
@@ -474,6 +479,154 @@ export async function duplicateApplication(
         return {
             success: false,
             message: 'Terjadi kesalahan pada server saat menduplikasi permohonan.',
+        };
+    }
+}
+
+/**
+ * Server Action: Mengubah status isFavorite pada permohonan
+ */
+export async function toggleApplicationFavorite(
+    id: string,
+    isFavorite?: boolean
+): Promise<ActionResponse<{ id: string; isFavorite: boolean }>> {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session || !session.user || !session.user.id) {
+            return {
+                success: false,
+                message: 'Anda harus login terlebih dahulu.',
+            };
+        }
+
+        const allowedRoles: UserRole[] = [UserRole.FRONT_OFFICER];
+        if (!allowedRoles.includes(session.user.role as UserRole)) {
+            return {
+                success: false,
+                message: 'Hanya petugas Front Officer yang dapat menandai atau memperbarui permohonan favorit.',
+            };
+        }
+
+        const existingApp = await prisma.application.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                applicationId: true,
+                applicationType: true,
+                status: true,
+                isFavorite: true,
+            },
+        });
+
+        if (!existingApp) {
+            return {
+                success: false,
+                message: 'Data permohonan tidak ditemukan.',
+            };
+        }
+
+        const targetFavorite = typeof isFavorite === 'boolean' ? isFavorite : !existingApp.isFavorite;
+
+        const updatedApp = await prisma.application.update({
+            where: { id },
+            data: {
+                isFavorite: targetFavorite,
+            },
+            select: {
+                id: true,
+                isFavorite: true,
+            },
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                applicationId: id,
+                actorId: session.user.id,
+                actorName: session.user.name,
+                actorRole: session.user.role as UserRole,
+                action: AuditAction.TOGGLE_FAVORITE,
+                previousStatus: existingApp.status,
+                newStatus: existingApp.status,
+                metadata: {
+                    applicationId: existingApp.applicationId,
+                    applicationType: existingApp.applicationType,
+                    isFavorite: targetFavorite,
+                    previousFavorite: existingApp.isFavorite,
+                },
+            },
+        });
+
+        revalidatePath('/dashboard/workflow/submission');
+        revalidatePath('/dashboard/workflow/applications');
+        revalidatePath('/dashboard');
+
+        return {
+            success: true,
+            message: targetFavorite ? 'Permohonan ditandai sebagai favorit.' : 'Permohonan dihapus dari favorit.',
+            data: {
+                id: updatedApp.id,
+                isFavorite: updatedApp.isFavorite,
+            },
+        };
+    } catch (error) {
+        console.error('Error toggling application favorite:', error);
+        return {
+            success: false,
+            message: 'Terjadi kesalahan pada server saat memperbarui status favorit.',
+        };
+    }
+}
+
+/**
+ * Server Action: Mengambil data bukti penerimaan pelayanan untuk dicetak
+ */
+export async function getApplicationReceipt(id: string): Promise<ActionResponse<any>> {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session || !session.user || !session.user.id) {
+            return {
+                success: false,
+                message: 'Anda harus login terlebih dahulu.',
+            };
+        }
+
+        const application = await prisma.application.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                applicationId: true,
+                applicationType: true,
+                status: true,
+                createdAt: true,
+                requestedNop: true,
+                taxSubject: true,
+                taxObject: true,
+                sla: true,
+                frontOfficer: {
+                    select: {
+                        name: true,
+                        email: true,
+                    },
+                },
+            },
+        });
+
+        if (!application) {
+            return {
+                success: false,
+                message: 'Data permohonan tidak ditemukan.',
+            };
+        }
+
+        return {
+            success: true,
+            data: application,
+        };
+    } catch (error) {
+        console.error('Error fetching application receipt:', error);
+        return {
+            success: false,
+            message: 'Gagal mengambil data bukti penerimaan pelayanan.',
         };
     }
 }

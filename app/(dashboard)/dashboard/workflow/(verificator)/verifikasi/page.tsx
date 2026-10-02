@@ -3,52 +3,61 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
 import { ApplicationDataTable } from '@/features/front-officer/components/ApplicationDataTable';
 
 export const metadata = {
-  title: 'Pengajuan Permohonan — SIPETRA Architax',
-  description: 'Daftar permohonan yang diajukan dan draf pengajuan baru.',
+  title: 'Verifikasi Permohonan — SIPETRA Architax',
+  description: 'Verifikasi kelengkapan berkas permohonan pajak daerah dan kelola bundle telaah.',
 };
 
-export default async function WorkflowPengajuanPage() {
+export default async function WorkflowVerifikasiPage() {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user) {
     redirect('/login');
   }
 
-  // Ambil seluruh data permohonan pengajuan
   const applications = await prisma.application.findMany({
     orderBy: {
       updatedAt: 'desc',
+    },
+    include: {
+      bundle: {
+        select: {
+          id: true,
+          bundleId: true,
+          name: true,
+          note: true,
+        },
+      },
     },
   });
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16">
-      {/* Header Workspace */}
+      {/* Header Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-sm border border-slate-200/80 shadow-xs">
         <div>
           <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-            Pengajuan Permohonan
+            Verifikasi Permohonan
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Kelola dan daftarkan permohonan pajak daerah serta lacak status pemrosesannya.
+            Periksa dan validasi dokumen permohonan pajak daerah, kelompokkan ke dalam bundle telaah, dan teruskan ke tahapan paraf KTU.
           </p>
         </div>
 
         <Link
-          href="/dashboard/applications/new"
+          href="/dashboard/workflow/bundles/new"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00a389] hover:bg-[#008670] text-white font-semibold text-sm rounded-sm shadow-xs transition-all cursor-pointer shrink-0"
         >
-          <Plus className="w-4 h-4" />
-          Permohonan Baru
+          <Layers className="w-4 h-4" />
+          Buat Bundle Baru
         </Link>
       </div>
 
       {/* Dynamic Table / Cards Workspace */}
-      <ApplicationDataTable applications={applications} />
+      <ApplicationDataTable applications={applications as any} actionRole="VERIFICATOR" />
     </div>
   );
 }
