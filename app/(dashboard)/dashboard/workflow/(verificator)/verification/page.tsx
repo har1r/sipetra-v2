@@ -3,8 +3,8 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
-import { Layers, Plus } from 'lucide-react';
-import { ApplicationDataTable } from '@/features/front-officer/components/ApplicationDataTable';
+import { Layers } from 'lucide-react';
+import { ApplicationDataTable } from '@/components/shared/tables/ApplicationDataTable';
 
 export const metadata = {
   title: 'Verifikasi Permohonan — SIPETRA Architax',
@@ -27,8 +27,7 @@ export default async function WorkflowVerifikasiPage() {
         select: {
           id: true,
           bundleId: true,
-          name: true,
-          note: true,
+          applicationType: true,
         },
       },
     },
@@ -36,7 +35,6 @@ export default async function WorkflowVerifikasiPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16">
-      {/* Header Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-sm border border-slate-200/80 shadow-xs">
         <div>
           <h1 className="text-xl font-bold text-slate-800 tracking-tight">
@@ -48,16 +46,15 @@ export default async function WorkflowVerifikasiPage() {
         </div>
 
         <Link
-          href="/dashboard/workflow/bundles/new"
+          href="/dashboard/workflow/verification/manage-bundle"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00a389] hover:bg-[#008670] text-white font-semibold text-sm rounded-sm shadow-xs transition-all cursor-pointer shrink-0"
         >
           <Layers className="w-4 h-4" />
-          Buat Bundle Baru
+          Kelola Bundle
         </Link>
       </div>
 
-      {/* Dynamic Table / Cards Workspace */}
-      <ApplicationDataTable applications={applications as any} actionRole="VERIFICATOR" />
+      <ApplicationDataTable applications={applications} actionRole="VERIFICATOR" />
     </div>
   );
 }

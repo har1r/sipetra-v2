@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import {
@@ -20,15 +20,17 @@ import { formatNopInput } from '@/lib/utils';
 interface ApplicationFormProps {
     mode: 'create' | 'edit' | 'duplicate';
     initialData?: ApplicationFormInput & { id?: string };
+    userRole?: string;
     onSuccess?: (result: { id: string; applicationId: string }) => void;
 }
 
-export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFormProps) {
+export function ApplicationForm({ mode, initialData, userRole, onSuccess }: ApplicationFormProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [serverError, setServerError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState<boolean>(false);
 
     const sanitizedInitialData: ApplicationFormInput | undefined = initialData
         ? {
@@ -53,7 +55,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
         : undefined;
 
     const defaultValues: ApplicationFormInput = sanitizedInitialData || {
-        applicationType: '' as any,
+        applicationType: '' as ApplicationTypeEnum,
         applicationId: '',
         smartgovId: '',
         requestedNop: '',
@@ -70,7 +72,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
     };
 
     const form = useForm<ApplicationFormInput>({
-        resolver: zodResolver(applicationFormSchema as any),
+        resolver: zodResolver(applicationFormSchema) as Resolver<ApplicationFormInput>,
         defaultValues,
         mode: 'onChange',
     });
@@ -174,7 +176,11 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                 if (onSuccess) {
                     onSuccess(res.data);
                 }
-                router.push('/dashboard/workflow/submission');
+                if (mode === 'edit' && userRole === 'VERIFICATOR') {
+                    router.push('/dashboard/workflow/verification');
+                } else {
+                    router.push('/dashboard/workflow/submission');
+                }
                 router.refresh();
             } else {
                 setServerError(res.message || 'Gagal menyimpan permohonan.');
@@ -193,7 +199,17 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
         : 0;
 
     return (
-        <div className="max-w-screen-2xl mx-auto space-y-6 pb-16 -mt-4 sm:-mt-5">
+        <form
+            onSubmit={(e) => {
+                if (currentStepIndex < totalSteps - 1) {
+                    e.preventDefault();
+                    return;
+                }
+                handleSubmit(onSubmit)(e);
+            }}
+            noValidate
+            className="max-w-screen-2xl mx-auto space-y-6 pb-16 -mt-4 sm:-mt-5"
+        >
             <div className="space-y-1 px-1 mb-10">
                 <BackButton />
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
@@ -496,20 +512,41 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                                                 accept=".pdf,.png,.jpg,.jpeg"
                                                 id="file-upload-main"
                                                 className="hidden"
-                                                onChange={(e) => {
+                                                onChange={async (e) => {
                                                     const uploaded = Array.from(e.target.files || []);
                                                     if (uploaded.length === 0) return;
-                                                    const currentFiles = watch('files') || [];
-                                                    const newUrls = uploaded.map((f) => URL.createObjectURL(f));
-                                                    setValue('files', [...currentFiles, ...newUrls]);
+                                                    setIsUploading(true);
+                                                    try {
+                                                        const formData = new FormData();
+                                                        uploaded.forEach((file) => formData.append('files', file));
+                                                        const res = await fetch('/api/upload', {
+                                                            method: 'POST',
+                                                            body: formData,
+                                                        });
+                                                        const result = await res.json();
+                                                        if (result.success && Array.isArray(result.urls)) {
+                                                            const currentFiles = (watch('files') || []).filter((f: string) => !f.startsWith('blob:'));
+                                                            setValue('files', [...currentFiles, ...result.urls], { shouldDirty: true, shouldValidate: true });
+                                                        } else {
+                                                            alert(result.message || 'Gagal mengunggah berkas.');
+                                                        }
+                                                    } catch (err: any) {
+                                                        console.error('File upload error:', err);
+                                                        alert('Terjadi kesalahan saat mengunggah berkas.');
+                                                    } finally {
+                                                        setIsUploading(false);
+                                                        e.target.value = '';
+                                                    }
                                                 }}
                                             />
                                             <label
                                                 htmlFor="file-upload-main"
-                                                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-[#00a389] text-slate-700 text-xs font-semibold rounded-sm cursor-pointer shadow-2xs transition-all"
+                                                className={`inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-[#00a389] text-slate-700 text-xs font-semibold rounded-sm cursor-pointer shadow-2xs transition-all ${
+                                                    isUploading ? 'opacity-60 cursor-not-allowed' : ''
+                                                }`}
                                             >
                                                 <Upload className="w-3.5 h-3.5 text-[#00a389]" />
-                                                Pilih / Drag File Berkas
+                                                {isUploading ? 'Sedang Mengunggah File...' : 'Pilih / Drag File Berkas'}
                                             </label>
                                             <p className="text-[11px] text-slate-400">
                                                 Format yang didukung: PDF, PNG, JPG (Maks. 10MB)
@@ -604,8 +641,7 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                             </button>
                         ) : (
                             <button
-                                type="button"
-                                onClick={handleSubmit(onSubmit)}
+                                type="submit"
                                 disabled={isPending}
                                 className="inline-flex items-center gap-2 px-6 py-2 bg-[#00a389] hover:bg-[#008670] text-white font-semibold text-xs rounded-sm shadow-xs shadow-[#00a389]/30 transition-all disabled:opacity-50 cursor-pointer"
                             >
@@ -616,6 +652,6 @@ export function ApplicationForm({ mode, initialData, onSuccess }: ApplicationFor
                     </div>
                 </div>
             </div>
-        </div>
+        </form>
     );
 }

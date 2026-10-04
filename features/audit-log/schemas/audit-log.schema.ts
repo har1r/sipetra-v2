@@ -15,6 +15,11 @@ export const AUDIT_ACTION_CONFIG: Record<
     badge: 'bg-indigo-50 text-indigo-700 border border-indigo-200/80',
     verb: 'mengklaim verifikasi berkas',
   },
+  UNCLAIM: {
+    label: 'Unclaimed',
+    badge: 'bg-slate-50 text-slate-700 border border-slate-200/80',
+    verb: 'membatalkan klaim verifikasi berkas',
+  },
   VERIFY_APPROVE: {
     label: 'Verified',
     badge: 'bg-teal-50 text-teal-700 border border-teal-200/80',

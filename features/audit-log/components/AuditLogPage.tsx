@@ -302,11 +302,19 @@ export default function AuditLogPage({
           <div className="divide-y divide-slate-100">
             {logs.map((log) => {
               const actorName = log.actorName || log.actor?.name || 'Petugas Sistem';
-              const actionCfg = AUDIT_ACTION_CONFIG[log.action] || {
-                label: log.action,
-                badge: 'bg-slate-100 text-slate-700 border border-slate-200',
-                verb: 'memperbarui',
-              };
+              const isUnfavorite = log.action === 'TOGGLE_FAVORITE' && log.metadata?.isFavorite === false;
+              const actionCfg = isUnfavorite
+                ? {
+                  label: 'Unfavorited',
+                  badge: 'bg-slate-100 text-slate-600 border border-slate-200/80',
+                  verb: 'menghapus permohonan dari favorit',
+                }
+                : AUDIT_ACTION_CONFIG[log.action] || {
+                  label: log.action,
+                  badge: 'bg-slate-100 text-slate-700 border border-slate-200',
+                  verb: 'memperbarui',
+                };
+
               const appNumber = log.application?.applicationId || '-';
               const applicantName = log.application?.taxSubject?.name || '';
               const targetTitle = applicantName
@@ -429,11 +437,14 @@ export default function AuditLogPage({
                   <span className="text-slate-500 font-medium">Tindakan:</span>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      AUDIT_ACTION_CONFIG[selectedLog.action]?.badge ||
-                      'bg-slate-100 text-slate-700'
+                      selectedLog.action === 'TOGGLE_FAVORITE' && selectedLog.metadata?.isFavorite === false
+                        ? 'bg-slate-100 text-slate-600 border border-slate-200/80'
+                        : AUDIT_ACTION_CONFIG[selectedLog.action]?.badge || 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {AUDIT_ACTION_CONFIG[selectedLog.action]?.label || selectedLog.action}
+                    {selectedLog.action === 'TOGGLE_FAVORITE' && selectedLog.metadata?.isFavorite === false
+                      ? 'Unfavorited'
+                      : AUDIT_ACTION_CONFIG[selectedLog.action]?.label || selectedLog.action}
                   </span>
                 </div>
 

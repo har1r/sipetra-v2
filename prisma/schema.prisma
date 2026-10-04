@@ -33,7 +33,6 @@ enum ApplicationRevision {
 }
 
 enum ApplicationStatus {
-  SUBMITTED
   VERIFYING
   ADMINISTRATIVE_OFFICE_HEAD_APPROVING
   OFFICE_HEAD_APPROVING
@@ -58,6 +57,7 @@ enum SubmissionChannel {
 enum AuditAction {
   SUBMIT
   CLAIM
+  UNCLAIM
   VERIFY_APPROVE
   REQUEST_INTERNAL_REVISION
   REQUEST_EXTERNAL_REVISION
@@ -107,7 +107,7 @@ model Application {
   taxSubject          TaxSubjectData
   taxObject           TaxObjectData
 
-  status              ApplicationStatus   @default(SUBMITTED)
+  status              ApplicationStatus   @default(VERIFYING)
   requestedNop        String?             @default("")
   submissionChannel   SubmissionChannel   @default(FRONT_OFFICER)
   isFavorite          Boolean             @default(false)
@@ -165,18 +165,17 @@ model AuditLog {
 }
 
 model Bundle {
-  id           String        @id @default(auto()) @map("_id") @db.ObjectId
-  bundleId     String        @unique
-  name         String?
-  note         String?
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  bundleId        String           @unique
+  applicationType ApplicationType?
 
-  applications Application[]
+  applications    Application[]
 
-  createdById  String?       @db.ObjectId
-  createdBy    User?         @relation(fields: [createdById], references: [id])
+  createdById     String?          @db.ObjectId
+  createdBy       User?            @relation(fields: [createdById], references: [id])
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model Holiday {

@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { UseFormRegister, FieldErrors, get } from 'react-hook-form';
+import { UseFormRegister, FieldErrors, FieldValues, Path, get } from 'react-hook-form';
 
-interface TaxSubjectFormProps {
+interface TaxSubjectFormProps<TFieldValues extends FieldValues = FieldValues> {
     prefix: string;
-    register: UseFormRegister<any>;
-    errors: FieldErrors<any>;
+    register: UseFormRegister<TFieldValues>;
+    errors: FieldErrors<TFieldValues>;
     title?: string;
     isCorrection?: boolean;
     isRequestedData?: boolean;
@@ -14,7 +14,7 @@ interface TaxSubjectFormProps {
     isFirstSection?: boolean;
 }
 
-export function TaxSubjectForm({
+export function TaxSubjectForm<TFieldValues extends FieldValues = FieldValues>({
     prefix,
     register,
     errors,
@@ -22,7 +22,7 @@ export function TaxSubjectForm({
     isRequestedData = true,
     isNewOrReactivation = false,
     isFirstSection = false,
-}: TaxSubjectFormProps) {
+}: TaxSubjectFormProps<TFieldValues>) {
     const getFieldError = (fieldName: string) => {
         const errorObj = get(errors, `${prefix}.${fieldName}`);
         return errorObj?.message as string | undefined;
@@ -58,7 +58,7 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.name` as const)}
+                            {...register(`${prefix}.name` as Path<TFieldValues>)}
                             placeholder="Ahmad Subagja"
                             className={`w-full bg-slate-50 border ${nameErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -83,7 +83,7 @@ export function TaxSubjectForm({
                             </span>
                             <input
                                 type="text"
-                                {...register(`${prefix}.whatsappNumber` as const)}
+                                {...register(`${prefix}.whatsappNumber` as Path<TFieldValues>)}
                                 placeholder="81234567890"
                                 className="w-full bg-transparent border-0 px-3 py-2 text-sm text-slate-800 focus:outline-none"
                             />
@@ -105,7 +105,7 @@ export function TaxSubjectForm({
                     </label>
                     <textarea
                         rows={2}
-                        {...register(`${prefix}.address` as const)}
+                        {...register(`${prefix}.address` as Path<TFieldValues>)}
                         placeholder="Jl. Raya Kartini No. 45"
                         className={`w-full bg-slate-50 border ${addressErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                             } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all resize-none`}
@@ -122,7 +122,8 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.block` as const)}
+                            maxLength={10}
+                            {...register(`${prefix}.block` as Path<TFieldValues>)}
                             placeholder="A-12"
                             className={`w-full bg-slate-50 border ${blockErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -137,7 +138,8 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.neighborhoodUnit` as const)}
+                            maxLength={3}
+                            {...register(`${prefix}.neighborhoodUnit` as Path<TFieldValues>)}
                             placeholder="001"
                             className={`w-full bg-slate-50 border ${rtErr ? 'border-rose-400' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -152,7 +154,8 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.communityUnit` as const)}
+                            maxLength={3}
+                            {...register(`${prefix}.communityUnit` as Path<TFieldValues>)}
                             placeholder="005"
                             className={`w-full bg-slate-50 border ${rwErr ? 'border-rose-400' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -175,7 +178,7 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.subdistrict` as const)}
+                            {...register(`${prefix}.subdistrict` as Path<TFieldValues>)}
                             placeholder="Sukamaju"
                             className={`w-full bg-slate-50 border ${subdistrictErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -196,7 +199,7 @@ export function TaxSubjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.village` as const)}
+                            {...register(`${prefix}.village` as Path<TFieldValues>)}
                             placeholder="Mekar Asri"
                             className={`w-full bg-slate-50 border ${villageErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}

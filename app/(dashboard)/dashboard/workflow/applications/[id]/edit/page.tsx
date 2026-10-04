@@ -8,15 +8,15 @@ import { BackButton } from '@/components/ui/BackButton';
 import { formatNopInput } from '@/lib/utils';
 
 export const metadata = {
-    title: 'Duplikasi Permohonan — SIPETRA Architax',
-    description: 'Duplikasi dan ajukan permohonan baru dari permohonan yang ada.',
+    title: 'Edit Permohonan PBB-P2',
+    description: 'Ubah detail permohonan data PBB-P2 di UPTD Pajak Wilayah IV.',
 };
 
-interface DuplicateApplicationPageProps {
+interface EditApplicationPageProps {
     params: Promise<{ id: string }>;
 }
 
-export default async function DuplicateApplicationPage({ params }: DuplicateApplicationPageProps) {
+export default async function EditApplicationPage({ params }: EditApplicationPageProps) {
     const session = await getServerSession(authOptions);
 
     if (!session) {
@@ -33,7 +33,7 @@ export default async function DuplicateApplicationPage({ params }: DuplicateAppl
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-rose-800 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                     <div>
-                        <h3 className="font-bold text-sm">Gagal Memuat Permohonan untuk Diduplikasi</h3>
+                        <h3 className="font-bold text-sm">Gagal Memuat Permohonan</h3>
                         <p className="text-xs text-rose-700 mt-1">
                             {res.message || 'Permohonan tidak ditemukan atau Anda tidak memiliki hak akses.'}
                         </p>
@@ -48,10 +48,10 @@ export default async function DuplicateApplicationPage({ params }: DuplicateAppl
     const initialData = {
         id: appData.id,
         applicationType: appData.applicationType,
-        applicationId: '',
-        smartgovId: '',
-        smartgovCreatedAt: null,
-        smartgovCompletedAt: null,
+        applicationId: appData.applicationId,
+        smartgovId: appData.smartgovId,
+        smartgovCreatedAt: appData.smartgovCreatedAt ? new Date(appData.smartgovCreatedAt) : null,
+        smartgovCompletedAt: appData.smartgovCompletedAt ? new Date(appData.smartgovCompletedAt) : null,
         requestedNop: formatNopInput(appData.requestedNop || ''),
         complementary: (appData.complementary || []).map((item: any) => ({
             ...item,
@@ -69,5 +69,5 @@ export default async function DuplicateApplicationPage({ params }: DuplicateAppl
         note: appData.note || '',
     };
 
-    return <ApplicationForm mode="duplicate" initialData={initialData} />;
+    return <ApplicationForm mode="edit" initialData={initialData} userRole={(session.user as any)?.role} />;
 }

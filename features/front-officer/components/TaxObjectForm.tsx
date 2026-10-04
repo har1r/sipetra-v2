@@ -1,14 +1,14 @@
 'use client';
 
 import React from 'react';
-import { UseFormRegister, FieldErrors, UseFormSetValue, get } from 'react-hook-form';
+import { UseFormRegister, FieldErrors, UseFormSetValue, FieldValues, Path, get } from 'react-hook-form';
 import { formatNopInput } from '@/lib/utils';
 
-interface TaxObjectFormProps {
+interface TaxObjectFormProps<TFieldValues extends FieldValues = FieldValues> {
     prefix: string;
-    register: UseFormRegister<any>;
-    errors: FieldErrors<any>;
-    setValue?: UseFormSetValue<any>;
+    register: UseFormRegister<TFieldValues>;
+    errors: FieldErrors<TFieldValues>;
+    setValue?: UseFormSetValue<TFieldValues>;
     title?: string;
     description?: string;
     isRequestedData?: boolean;
@@ -16,7 +16,7 @@ interface TaxObjectFormProps {
     isFirstSection?: boolean;
 }
 
-export function TaxObjectForm({
+export function TaxObjectForm<TFieldValues extends FieldValues = FieldValues>({
     prefix,
     register,
     errors,
@@ -25,7 +25,7 @@ export function TaxObjectForm({
     isRequestedData = false,
     isNewOrReactivation = false,
     isFirstSection = false,
-}: TaxObjectFormProps) {
+}: TaxObjectFormProps<TFieldValues>) {
     const getFieldError = (fieldName: string) => {
         const errorObj = get(errors, `${prefix}.${fieldName}`);
         return errorObj?.message as string | undefined;
@@ -61,11 +61,12 @@ export function TaxObjectForm({
                         <input
                             type="text"
                             maxLength={24}
-                            {...register(`${prefix}.nop` as const)}
+                            {...register(`${prefix}.nop` as Path<TFieldValues>)}
                             onChange={(e) => {
                                 const formatted = formatNopInput(e.target.value);
+                                e.target.value = formatted;
                                 if (setValue) {
-                                    setValue(`${prefix}.nop`, formatted, { shouldValidate: true });
+                                    (setValue as any)(`${prefix}.nop`, formatted, { shouldValidate: true });
                                 }
                             }}
                             placeholder="36.19.150.008.009.0867-0"
@@ -84,11 +85,12 @@ export function TaxObjectForm({
                         <input
                             type="text"
                             maxLength={24}
-                            {...register('requestedNop')}
+                            {...register('requestedNop' as Path<TFieldValues>)}
                             onChange={(e) => {
                                 const formatted = formatNopInput(e.target.value);
+                                e.target.value = formatted;
                                 if (setValue) {
-                                    setValue('requestedNop', formatted, { shouldValidate: true });
+                                    (setValue as any)('requestedNop', formatted, { shouldValidate: true });
                                 }
                             }}
                             placeholder="36.19.150.008.009.0867-0"
@@ -112,7 +114,7 @@ export function TaxObjectForm({
                     </label>
                     <textarea
                         rows={2}
-                        {...register(`${prefix}.address` as const)}
+                        {...register(`${prefix}.address` as Path<TFieldValues>)}
                         placeholder="Jl. Pahlawan B2 No. 10"
                         className={`w-full bg-slate-50 border ${addressErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                             } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all resize-none`}
@@ -129,7 +131,8 @@ export function TaxObjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.block` as const)}
+                            maxLength={10}
+                            {...register(`${prefix}.block` as Path<TFieldValues>)}
                             placeholder="B2"
                             className={`w-full bg-slate-50 border ${blockErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -144,7 +147,8 @@ export function TaxObjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.neighborhoodUnit` as const)}
+                            maxLength={3}
+                            {...register(`${prefix}.neighborhoodUnit` as Path<TFieldValues>)}
                             placeholder="002"
                             className={`w-full bg-slate-50 border ${rtErr ? 'border-rose-400' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -159,7 +163,8 @@ export function TaxObjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.communityUnit` as const)}
+                            maxLength={3}
+                            {...register(`${prefix}.communityUnit` as Path<TFieldValues>)}
                             placeholder="006"
                             className={`w-full bg-slate-50 border ${rwErr ? 'border-rose-400' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -182,7 +187,7 @@ export function TaxObjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.subdistrict` as const)}
+                            {...register(`${prefix}.subdistrict` as Path<TFieldValues>)}
                             placeholder="Sukamaju"
                             className={`w-full bg-slate-50 border ${subdistrictErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -203,7 +208,7 @@ export function TaxObjectForm({
                         </label>
                         <input
                             type="text"
-                            {...register(`${prefix}.village` as const)}
+                            {...register(`${prefix}.village` as Path<TFieldValues>)}
                             placeholder="Mekar Asri"
                             className={`w-full bg-slate-50 border ${villageErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                                 } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}
@@ -228,7 +233,7 @@ export function TaxObjectForm({
                             <input
                                 type="number"
                                 step="any"
-                                {...register(`${prefix}.landArea` as const)}
+                                {...register(`${prefix}.landArea` as Path<TFieldValues>)}
                                 placeholder="120"
                                 className="w-full bg-transparent border-0 px-3 py-2 text-sm text-slate-800 focus:outline-none"
                             />
@@ -249,7 +254,7 @@ export function TaxObjectForm({
                             <input
                                 type="number"
                                 step="any"
-                                {...register(`${prefix}.buildingArea` as const)}
+                                {...register(`${prefix}.buildingArea` as Path<TFieldValues>)}
                                 placeholder="45 (isi 0 jika tanah kosong)"
                                 className="w-full bg-transparent border-0 px-3 py-2 text-sm text-slate-800 focus:outline-none"
                             />
@@ -274,7 +279,7 @@ export function TaxObjectForm({
                     </label>
                     <input
                         type="text"
-                        {...register(`${prefix}.certificate` as const)}
+                        {...register(`${prefix}.certificate` as Path<TFieldValues>)}
                         placeholder="SHM No. 12345/2023"
                         className={`w-full bg-slate-50 border ${certificateErr ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
                             } focus:bg-white focus:border-[#00a389] text-slate-800 rounded-sm px-3 py-2 text-sm transition-all`}

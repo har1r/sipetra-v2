@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { ApplicationType } from '@prisma/client';
 
 export const bundleCreateSchema = z.object({
   bundleId: z.string().optional(),
-  name: z.string().optional(),
-  note: z.string().optional(),
+  applicationType: z.nativeEnum(ApplicationType, {
+    message: 'Jenis permohonan wajib dipilih',
+  }),
   applicationIds: z.array(z.string()).default([]),
 });
 
@@ -19,8 +21,7 @@ export type AssignBundleInput = z.infer<typeof assignBundleSchema>;
 export interface BundleSummaryItem {
   id: string;
   bundleId: string;
-  name?: string | null;
-  note?: string | null;
+  applicationType?: ApplicationType | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   createdById?: string | null;

@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { ApplicationFormInput, applicationFormSchema } from '../schemas/application.schema';
-import { ApplicationStatus, AuditAction, SubmissionChannel, UserRole } from '@prisma/client';
+import { ApplicationStatus, ApplicationType, AuditAction, Prisma, SubmissionChannel, UserRole } from '@prisma/client';
 import { formatNopInput } from '@/lib/utils';
 
 export type ActionResponse<T = unknown> = {
@@ -18,8 +18,9 @@ export type ActionResponse<T = unknown> = {
 function generateUniqueApplicationId(): string {
     const now = new Date();
     const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     const randomStr = Math.floor(1000 + Math.random() * 9000);
-    return `SIP-${dateStr}-${randomStr}`;
+    return `SIP-${dateStr}-${timeStr}-${randomStr}`;
 }
 
 /**
@@ -58,18 +59,11 @@ export async function createApplication(
 
         let finalAppId = validData.applicationId?.trim();
         if (!finalAppId) {
-            let isUnique = false;
-            while (!isUnique) {
-                const candidate = generateUniqueApplicationId();
-                const existing = await prisma.application.findUnique({ where: { applicationId: candidate } });
-                if (!existing) {
-                    finalAppId = candidate;
-                    isUnique = true;
-                }
-            }
+            finalAppId = generateUniqueApplicationId();
         } else {
             const existingApp = await prisma.application.findUnique({
                 where: { applicationId: finalAppId },
+                select: { id: true },
             });
             if (existingApp) {
                 return {
@@ -89,14 +83,14 @@ export async function createApplication(
                 nop: validData.taxObject.nop ? formatNopInput(validData.taxObject.nop) : '',
             }
             : validData.taxObject;
-        const formattedComplementary = (validData.complementary || []).map((item: any) => ({
-            ...item,
-            taxObjectData: item?.taxObjectData
+        const formattedComplementary = (validData.complementary || []).map((item) => ({
+            taxSubjectData: item.taxSubjectData,
+            taxObjectData: item.taxObjectData
                 ? {
                     ...item.taxObjectData,
                     nop: item.taxObjectData.nop ? formatNopInput(item.taxObjectData.nop) : '',
                 }
-                : item?.taxObjectData,
+                : item.taxObjectData,
         }));
 
         const newApp = await prisma.application.create({
@@ -104,14 +98,14 @@ export async function createApplication(
                 applicationId: finalAppId,
                 smartgovId: validData.smartgovId || null,
                 smartgovCreatedAt: validData.smartgovCreatedAt || null,
-                applicationType: validData.applicationType as any,
+                applicationType: validData.applicationType as ApplicationType,
                 requestedNop: formattedRequestedNop,
-                status: ApplicationStatus.SUBMITTED,
+                status: ApplicationStatus.VERIFYING,
                 submissionChannel: SubmissionChannel.FRONT_OFFICER,
                 frontOfficerId: session.user.id,
-                taxSubject: validData.taxSubject as any,
-                taxObject: formattedTaxObject as any,
-                complementary: formattedComplementary as any,
+                taxSubject: validData.taxSubject,
+                taxObject: formattedTaxObject,
+                complementary: formattedComplementary,
                 files: validData.files,
                 note: validData.note || null,
                 sla: {
@@ -120,22 +114,24 @@ export async function createApplication(
                     currentStageStartedAt: new Date(),
                     currentStageMinutesLimit: 2 * 24 * 60,
                 },
-            },
-        });
-
-        await prisma.auditLog.create({
-            data: {
-                applicationId: newApp.id,
-                actorId: session.user.id,
-                actorName: session.user.name,
-                actorRole: session.user.role as UserRole,
-                action: AuditAction.SUBMIT,
-                newStatus: ApplicationStatus.SUBMITTED,
-                metadata: {
-                    applicationId: newApp.applicationId,
-                    smartgovId: newApp.smartgovId,
-                    applicationType: newApp.applicationType,
+                auditLogs: {
+                    create: {
+                        actorId: session.user.id,
+                        actorName: session.user.name,
+                        actorRole: session.user.role as UserRole,
+                        action: AuditAction.SUBMIT,
+                        newStatus: ApplicationStatus.VERIFYING,
+                        metadata: {
+                            applicationId: finalAppId,
+                            smartgovId: validData.smartgovId || null,
+                            applicationType: validData.applicationType,
+                        },
+                    },
                 },
+            },
+            select: {
+                id: true,
+                applicationId: true,
             },
         });
 
@@ -152,6 +148,13 @@ export async function createApplication(
             },
         };
     } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return {
+                success: false,
+                message: 'Nomor permohonan sudah digunakan oleh data lain. Silakan periksa kembali.',
+                errors: { applicationId: ['Nomor permohonan ini sudah terdaftar.'] },
+            };
+        }
         console.error('Error creating application:', error);
         return {
             success: false,
@@ -186,6 +189,12 @@ export async function editApplication(
 
         const existingApp = await prisma.application.findUnique({
             where: { id },
+            select: {
+                id: true,
+                status: true,
+                bundleId: true,
+                applicationId: true,
+            },
         });
         if (!existingApp) {
             return {
@@ -195,7 +204,6 @@ export async function editApplication(
         }
 
         const editableStatuses: ApplicationStatus[] = [
-            ApplicationStatus.SUBMITTED,
             ApplicationStatus.VERIFYING,
             ApplicationStatus.INTERNAL_REVISION,
             ApplicationStatus.EXTERNAL_REVISION,
@@ -222,6 +230,7 @@ export async function editApplication(
         if (targetAppId !== existingApp.applicationId) {
             const numberConflict = await prisma.application.findUnique({
                 where: { applicationId: targetAppId },
+                select: { id: true },
             });
             if (numberConflict) {
                 return {
@@ -241,50 +250,62 @@ export async function editApplication(
                 nop: validData.taxObject.nop ? formatNopInput(validData.taxObject.nop) : '',
             }
             : validData.taxObject;
-        const formattedComplementary = (validData.complementary || []).map((item: any) => ({
-            ...item,
-            taxObjectData: item?.taxObjectData
+        const formattedComplementary = (validData.complementary || []).map((item) => ({
+            taxSubjectData: item.taxSubjectData,
+            taxObjectData: item.taxObjectData
                 ? {
                     ...item.taxObjectData,
                     nop: item.taxObjectData.nop ? formatNopInput(item.taxObjectData.nop) : '',
                 }
-                : item?.taxObjectData,
+                : item.taxObjectData,
         }));
 
-        const updatedApp = await prisma.application.update({
-            where: { id },
-            data: {
-                applicationId: targetAppId,
-                smartgovId: validData.smartgovId || null,
-                smartgovCreatedAt: validData.smartgovCreatedAt || null,
-                smartgovCompletedAt: validData.smartgovCompletedAt || null,
-                applicationType: validData.applicationType as any,
-                requestedNop: formattedRequestedNop,
-                taxSubject: validData.taxSubject as any,
-                taxObject: formattedTaxObject as any,
-                complementary: formattedComplementary as any,
-                files: validData.files,
-                note: validData.note || null,
-            },
-        });
-
-        await prisma.auditLog.create({
-            data: {
-                applicationId: id,
-                actorId: session.user.id,
-                actorName: session.user.name,
-                actorRole: session.user.role as UserRole,
-                action: existingApp.status === ApplicationStatus.SUBMITTED ? AuditAction.EDIT : AuditAction.RESUBMIT_REVISION,
-                previousStatus: existingApp.status,
-                newStatus: updatedApp.status,
-                metadata: {
-                    applicationId: updatedApp.applicationId,
-                    applicationType: updatedApp.applicationType,
+        const [updateResult] = await prisma.$transaction([
+            prisma.application.updateMany({
+                where: {
+                    id,
+                    status: { in: editableStatuses },
                 },
-            },
-        });
+                data: {
+                    applicationId: targetAppId,
+                    smartgovId: validData.smartgovId || null,
+                    smartgovCreatedAt: validData.smartgovCreatedAt || null,
+                    smartgovCompletedAt: validData.smartgovCompletedAt || null,
+                    applicationType: validData.applicationType as ApplicationType,
+                    requestedNop: formattedRequestedNop,
+                    taxSubject: validData.taxSubject,
+                    taxObject: formattedTaxObject,
+                    complementary: formattedComplementary,
+                    files: validData.files,
+                    note: validData.note || null,
+                },
+            }),
+            prisma.auditLog.create({
+                data: {
+                    applicationId: id,
+                    actorId: session.user.id,
+                    actorName: session.user.name,
+                    actorRole: session.user.role as UserRole,
+                    action: existingApp.status === ApplicationStatus.VERIFYING ? AuditAction.EDIT : AuditAction.RESUBMIT_REVISION,
+                    previousStatus: existingApp.status,
+                    newStatus: existingApp.status,
+                    metadata: {
+                        applicationId: targetAppId,
+                        applicationType: validData.applicationType,
+                    },
+                },
+            }),
+        ]);
+
+        if (updateResult.count === 0) {
+            return {
+                success: false,
+                message: 'Gagal memperbarui permohonan. Status permohonan mungkin telah berubah atau tidak ditemukan.',
+            };
+        }
 
         revalidatePath('/dashboard/workflow/submission');
+        revalidatePath('/dashboard/workflow/verification');
         revalidatePath('/dashboard/workflow/applications');
         revalidatePath(`/dashboard/workflow/applications/${id}/edit`);
         revalidatePath('/dashboard');
@@ -293,11 +314,18 @@ export async function editApplication(
             success: true,
             message: 'Permohonan berhasil diperbarui!',
             data: {
-                id: updatedApp.id,
-                applicationId: updatedApp.applicationId,
+                id: id,
+                applicationId: targetAppId,
             },
         };
     } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return {
+                success: false,
+                message: 'Nomor permohonan sudah digunakan oleh permohonan lain.',
+                errors: { applicationId: ['Nomor permohonan ini sudah terdaftar.'] },
+            };
+        }
         console.error('Error editing application:', error);
         return {
             success: false,
@@ -393,16 +421,7 @@ export async function duplicateApplication(
         }
         const validData = validationResult.data;
 
-        let finalAppId = generateUniqueApplicationId();
-        let isUnique = false;
-        while (!isUnique) {
-            const existing = await prisma.application.findUnique({ where: { applicationId: finalAppId } });
-            if (!existing) {
-                isUnique = true;
-            } else {
-                finalAppId = generateUniqueApplicationId();
-            }
-        }
+        const finalAppId = generateUniqueApplicationId();
 
         const formattedRequestedNop = validData.requestedNop ? formatNopInput(validData.requestedNop) : '';
         const formattedTaxObject = validData.taxObject
@@ -411,14 +430,14 @@ export async function duplicateApplication(
                 nop: validData.taxObject.nop ? formatNopInput(validData.taxObject.nop) : '',
             }
             : validData.taxObject;
-        const formattedComplementary = (validData.complementary || []).map((item: any) => ({
-            ...item,
-            taxObjectData: item?.taxObjectData
+        const formattedComplementary = (validData.complementary || []).map((item) => ({
+            taxSubjectData: item.taxSubjectData,
+            taxObjectData: item.taxObjectData
                 ? {
                     ...item.taxObjectData,
                     nop: item.taxObjectData.nop ? formatNopInput(item.taxObjectData.nop) : '',
                 }
-                : item?.taxObjectData,
+                : item.taxObjectData,
         }));
 
         const duplicatedApp = await prisma.application.create({
@@ -427,14 +446,14 @@ export async function duplicateApplication(
                 smartgovId: null,
                 smartgovCreatedAt: null,
                 smartgovCompletedAt: null,
-                applicationType: validData.applicationType as any,
+                applicationType: validData.applicationType as ApplicationType,
                 requestedNop: formattedRequestedNop,
-                status: ApplicationStatus.SUBMITTED,
+                status: ApplicationStatus.VERIFYING,
                 submissionChannel: SubmissionChannel.FRONT_OFFICER,
                 frontOfficerId: session.user.id,
-                taxSubject: validData.taxSubject as any,
-                taxObject: formattedTaxObject as any,
-                complementary: formattedComplementary as any,
+                taxSubject: validData.taxSubject,
+                taxObject: formattedTaxObject,
+                complementary: formattedComplementary,
                 files: validData.files || [],
                 note: validData.note || null,
                 sla: {
@@ -443,22 +462,24 @@ export async function duplicateApplication(
                     currentStageStartedAt: new Date(),
                     currentStageMinutesLimit: 2 * 24 * 60,
                 },
-            },
-        });
-
-        await prisma.auditLog.create({
-            data: {
-                applicationId: duplicatedApp.id,
-                actorId: session.user.id,
-                actorName: session.user.name,
-                actorRole: session.user.role as UserRole,
-                action: 'DUPLICATE' as AuditAction,
-                newStatus: ApplicationStatus.SUBMITTED,
-                metadata: {
-                    applicationId: duplicatedApp.applicationId,
-                    duplicatedFromSourceId: sourceAppId,
-                    applicationType: duplicatedApp.applicationType,
+                auditLogs: {
+                    create: {
+                        actorId: session.user.id,
+                        actorName: session.user.name,
+                        actorRole: session.user.role as UserRole,
+                        action: AuditAction.DUPLICATE,
+                        newStatus: ApplicationStatus.VERIFYING,
+                        metadata: {
+                            applicationId: finalAppId,
+                            duplicatedFromSourceId: sourceAppId,
+                            applicationType: validData.applicationType,
+                        },
+                    },
                 },
+            },
+            select: {
+                id: true,
+                applicationId: true,
             },
         });
 
@@ -475,6 +496,12 @@ export async function duplicateApplication(
             },
         };
     } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return {
+                success: false,
+                message: 'Nomor permohonan bentrok pada saat pembuatan. Silakan coba kembali.',
+            };
+        }
         console.error('Error duplicating application:', error);
         return {
             success: false,
@@ -527,34 +554,35 @@ export async function toggleApplicationFavorite(
 
         const targetFavorite = typeof isFavorite === 'boolean' ? isFavorite : !existingApp.isFavorite;
 
-        const updatedApp = await prisma.application.update({
-            where: { id },
-            data: {
-                isFavorite: targetFavorite,
-            },
-            select: {
-                id: true,
-                isFavorite: true,
-            },
-        });
-
-        await prisma.auditLog.create({
-            data: {
-                applicationId: id,
-                actorId: session.user.id,
-                actorName: session.user.name,
-                actorRole: session.user.role as UserRole,
-                action: AuditAction.TOGGLE_FAVORITE,
-                previousStatus: existingApp.status,
-                newStatus: existingApp.status,
-                metadata: {
-                    applicationId: existingApp.applicationId,
-                    applicationType: existingApp.applicationType,
+        const [updatedApp] = await prisma.$transaction([
+            prisma.application.update({
+                where: { id },
+                data: {
                     isFavorite: targetFavorite,
-                    previousFavorite: existingApp.isFavorite,
                 },
-            },
-        });
+                select: {
+                    id: true,
+                    isFavorite: true,
+                },
+            }),
+            prisma.auditLog.create({
+                data: {
+                    applicationId: id,
+                    actorId: session.user.id,
+                    actorName: session.user.name,
+                    actorRole: session.user.role as UserRole,
+                    action: AuditAction.TOGGLE_FAVORITE,
+                    previousStatus: existingApp.status,
+                    newStatus: existingApp.status,
+                    metadata: {
+                        applicationId: existingApp.applicationId,
+                        applicationType: existingApp.applicationType,
+                        isFavorite: targetFavorite,
+                        previousFavorite: existingApp.isFavorite,
+                    },
+                },
+            }),
+        ]);
 
         revalidatePath('/dashboard/workflow/submission');
         revalidatePath('/dashboard/workflow/applications');
@@ -577,10 +605,46 @@ export async function toggleApplicationFavorite(
     }
 }
 
+export interface ApplicationReceiptData {
+    id: string;
+    applicationId: string;
+    applicationType: ApplicationType;
+    status: ApplicationStatus;
+    createdAt: Date;
+    requestedNop: string | null;
+    taxSubject: {
+        name?: string | null;
+        whatsappNumber?: string | null;
+        address?: string | null;
+        block?: string | null;
+        neighborhoodUnit?: string | null;
+        communityUnit?: string | null;
+        subdistrict?: string | null;
+        village?: string | null;
+    };
+    taxObject: {
+        nop?: string | null;
+        address?: string | null;
+        block?: string | null;
+        neighborhoodUnit?: string | null;
+        communityUnit?: string | null;
+        subdistrict?: string | null;
+        village?: string | null;
+        landArea?: number | null;
+        buildingArea?: number | null;
+        certificate?: string | null;
+    };
+    sla?: unknown;
+    frontOfficer?: {
+        name: string;
+        email: string;
+    } | null;
+}
+
 /**
  * Server Action: Mengambil data bukti penerimaan pelayanan untuk dicetak
  */
-export async function getApplicationReceipt(id: string): Promise<ActionResponse<any>> {
+export async function getApplicationReceipt(id: string): Promise<ActionResponse<ApplicationReceiptData>> {
     try {
         const session = await getServerSession(authOptions);
         if (!session || !session.user || !session.user.id) {

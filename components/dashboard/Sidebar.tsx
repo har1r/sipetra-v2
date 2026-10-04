@@ -94,7 +94,7 @@ export default function Sidebar() {
   // MODEL 2: 7 WORKFLOW STEPS DATA (TIMELINE STEPPER 1-7)
   const workflowSteps = [
     { stepNum: 1, id: 'pengajuan', label: 'Pengajuan', href: '/dashboard/workflow/submission', icon: FilePlus, sla: 'Luar SLA' },
-    { stepNum: 2, id: 'verifikasi', label: 'Verifikasi', href: '/dashboard/workflow/verifikasi', icon: SearchCheck, sla: '2 Hari' },
+    { stepNum: 2, id: 'verifikasi', label: 'Verifikasi', href: '/dashboard/workflow/verification', icon: SearchCheck, sla: '2 Hari' },
     { stepNum: 3, id: 'paraf-ktu', label: 'Paraf KTU', href: '/dashboard/workflow/paraf-ktu', icon: PenTool, sla: '2 Hari' },
     { stepNum: 4, id: 'ttd-kupt', label: 'TTD KUPT', href: '/dashboard/workflow/ttd-kupt', icon: FileCheck2, sla: '2 Hari' },
     { stepNum: 5, id: 'pengiriman', label: 'Pengiriman', href: '/dashboard/workflow/pengiriman', icon: Send, sla: '3 Hari' },
@@ -116,6 +116,17 @@ export default function Sidebar() {
   ];
 
   const isWorkflowActive = pathname.startsWith('/dashboard/workflow');
+
+  const isStepActive = (stepHref: string, stepId: string) => {
+    if (pathname === stepHref || pathname.startsWith(`${stepHref}/`)) {
+      return true;
+    }
+    if (pathname.startsWith('/dashboard/workflow/applications')) {
+      if (userRoleRaw === 'VERIFICATOR' && stepId === 'verifikasi') return true;
+      if (userRoleRaw === 'FRONT_OFFICER' && stepId === 'pengajuan') return true;
+    }
+    return false;
+  };
 
   return (
     <aside
@@ -236,7 +247,7 @@ export default function Sidebar() {
                   <div className="relative flex flex-col mt-1.5">
                     {workflowSteps.map((step, idx) => {
                       const Icon = step.icon;
-                      const isActive = pathname === step.href;
+                      const isActive = isStepActive(step.href, step.id);
                       const isFirst = idx === 0;
                       const isLast = idx === workflowSteps.length - 1;
 
@@ -420,7 +431,7 @@ export default function Sidebar() {
                       <div className="relative flex flex-col pt-0.5">
                         {workflowSteps.map((step, idx) => {
                           const Icon = step.icon;
-                          const isActive = pathname === step.href;
+                          const isActive = isStepActive(step.href, step.id);
                           const isFirst = idx === 0;
                           const isLast = idx === workflowSteps.length - 1;
 
