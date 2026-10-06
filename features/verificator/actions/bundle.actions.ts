@@ -653,3 +653,89 @@ export async function claimApplication(
     }
 }
 
+export async function getBundleRecommendationData(bundleIdOrId: string): Promise<ActionResponse<any>> {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user) {
+            return {
+                success: false,
+                message: 'Akses ditolak. Sesi tidak valid.',
+            };
+        }
+
+        const bundle = await prisma.bundle.findFirst({
+            where: {
+                OR: [
+                    { id: bundleIdOrId },
+                    { bundleId: bundleIdOrId },
+                ],
+            },
+            include: {
+                createdBy: {
+                    select: {
+                        name: true,
+                        email: true,
+                    },
+                },
+                applications: {
+                    orderBy: { createdAt: 'asc' },
+                    select: {
+                        id: true,
+                        applicationId: true,
+                        smartgovId: true,
+                        requestedNop: true,
+                        applicationType: true,
+                        taxSubject: true,
+                        taxObject: true,
+                        complementary: true,
+                        createdAt: true,
+                    },
+                },
+            },
+        });
+
+        if (!bundle) {
+            return {
+                success: false,
+                message: 'Bundle tidak ditemukan.',
+            };
+        }
+
+        let counter = 1;
+        const formattedApplications = bundle.applications.map((app) => {
+            const prevLB = app.complementary?.[0]?.taxObjectData?.buildingArea ?? 0;
+            const newLB = app.taxObject?.buildingArea ?? 0;
+            const hasBuildingDiff = Number(prevLB) !== Number(newLB);
+
+            const noBumi = counter++;
+            let noBangunan: number | null = null;
+            if (hasBuildingDiff) {
+                noBangunan = counter++;
+            }
+
+            return {
+                ...app,
+                formNumbers: {
+                    noBumi,
+                    noBangunan,
+                },
+            };
+        });
+
+        return {
+            success: true,
+            data: {
+                ...bundle,
+                applications: formattedApplications,
+            },
+        };
+    } catch (error) {
+        console.error('Error fetching bundle recommendation data:', error);
+        return {
+            success: false,
+            message: 'Terjadi kesalahan saat memuat data surat rekomendasi.',
+        };
+    }
+}
+
+

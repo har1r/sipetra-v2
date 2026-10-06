@@ -19,6 +19,7 @@ import {
   Package,
   User,
   PenTool,
+  Printer,
 } from 'lucide-react';
 import { KtuBundleItem } from '@/features/head-of-administrative-office/schemas/bundle.schema';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
@@ -321,11 +322,21 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                          <a
+                            href={`/preview/bundle/${bundle.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setOpenMenuId(null)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Cetak Rekomendasi</span>
+                          </a>
                           {!isVerificator && (
                             <Link
                               href={approvalUrl(bundle.id)}
                               onClick={() => setOpenMenuId(null)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
                             >
                               <PenTool className="w-3.5 h-3.5 text-[#00a389]" />
                               <span>{actionLabel}</span>
@@ -334,7 +345,7 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                           <button
                             type="button"
                             onClick={() => handleCopyBundleId(bundle.bundleId)}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left ${!isVerificator ? 'border-t border-slate-100' : ''}`}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
                           >
                             <Copy className="w-3.5 h-3.5 text-slate-600" />
                             <span>Salin ID Bundle</span>
@@ -465,11 +476,21 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                                 onClick={() => setOpenMenuId(null)}
                               />
                               <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left">
+                                <a
+                                  href={`/preview/bundle/${bundle.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => setOpenMenuId(null)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Cetak Rekomendasi</span>
+                                </a>
                                 {!isVerificator && (
                                   <Link
                                     href={approvalUrl(bundle.id)}
                                     onClick={() => setOpenMenuId(null)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
                                   >
                                     <PenTool className="w-3.5 h-3.5 text-[#00a389]" />
                                     <span>{actionLabel}</span>
@@ -478,7 +499,7 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                                 <button
                                   type="button"
                                   onClick={() => handleCopyBundleId(bundle.bundleId)}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left ${!isVerificator ? 'border-t border-slate-100' : ''}`}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
                                 >
                                   <Copy className="w-3.5 h-3.5 text-slate-600" />
                                   <span>Salin ID Bundle</span>

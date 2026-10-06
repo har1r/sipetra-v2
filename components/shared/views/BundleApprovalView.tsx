@@ -102,10 +102,10 @@ export function BundleApprovalView({
 
   const typeInfo = bundle.applicationType
     ? APPLICATION_TYPE_UI[bundle.applicationType as ApplicationTypeEnum] || {
-        code: bundle.applicationType,
-        title: bundle.applicationType,
-        badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
-      }
+      code: bundle.applicationType,
+      title: bundle.applicationType,
+      badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
+    }
     : null;
 
   // Filter out client-only temporary blob: URLs which cannot be read across sessions
@@ -145,16 +145,8 @@ export function BundleApprovalView({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono font-bold text-slate-900 text-base flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-slate-500" />
                 {bundle.bundleId}
               </span>
-              {typeInfo && (
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold border ${typeInfo.badgeStyle}`}
-                >
-                  {typeInfo.title}
-                </span>
-              )}
               {isApproved && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -162,9 +154,6 @@ export function BundleApprovalView({
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Dibuat oleh: <span className="font-semibold text-slate-600">{bundle.createdBy?.name || '-'}</span> • {bundle.applications.length} Permohonan Terlampir
-            </p>
           </div>
         </div>
 
@@ -172,11 +161,10 @@ export function BundleApprovalView({
           <button
             type="button"
             onClick={handleApprovalAction}
-            className={`inline-flex items-center gap-2 px-4 py-2 font-semibold text-xs rounded-sm shadow-xs transition-all cursor-pointer ${
-              isApproved
-                ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
-                : 'bg-[#00a389] hover:bg-[#008670] text-white'
-            }`}
+            className={`inline-flex items-center gap-2 px-4 py-2 font-semibold text-xs rounded-sm shadow-xs transition-all cursor-pointer ${isApproved
+              ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
+              : 'bg-[#00a389] hover:bg-[#008670] text-white'
+              }`}
           >
             <ShieldCheck className="w-4 h-4" />
             <span>{isApproved ? 'Selesai Diproses' : resolvedApproveBtn}</span>
@@ -231,11 +219,10 @@ export function BundleApprovalView({
                     key={app.id}
                     type="button"
                     onClick={() => handleSelectApp(app.id)}
-                    className={`w-full text-left p-2.5 transition-all cursor-pointer flex flex-col gap-1 relative ${
-                      isSelected
-                        ? 'bg-slate-50 border-l-4 border-[#00a389]'
-                        : 'hover:bg-slate-50/70'
-                    }`}
+                    className={`w-full text-left p-2.5 transition-all cursor-pointer flex flex-col gap-1 relative ${isSelected
+                      ? 'bg-slate-50 border-l-4 border-[#00a389]'
+                      : 'hover:bg-slate-50/70'
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-1.5">
                       <span className="font-bold text-slate-900 text-xs tracking-tight truncate">
@@ -271,11 +258,8 @@ export function BundleApprovalView({
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-xs font-bold text-slate-800 truncate">
-                      Lampiran Berkas: {selectedApp.applicationId}
+                      Lampiran Berkas
                     </h3>
-                    <p className="text-[11px] text-slate-500 truncate">
-                      Wajib Pajak: {selectedApp.taxSubject?.name || '-'}
-                    </p>
                   </div>
                 </div>
 
@@ -288,11 +272,10 @@ export function BundleApprovalView({
                           key={idx}
                           type="button"
                           onClick={() => setActiveFileIndex(idx)}
-                          className={`px-2 py-0.5 rounded-xs text-[11px] font-semibold transition-colors cursor-pointer ${
-                            activeFileIndex === idx
-                              ? 'bg-[#00a389] text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
+                          className={`px-2 py-0.5 rounded-xs text-[11px] font-semibold transition-colors cursor-pointer ${activeFileIndex === idx
+                            ? 'bg-[#00a389] text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
                         >
                           Berkas #{idx + 1}
                         </button>
@@ -329,9 +312,9 @@ export function BundleApprovalView({
               <div className="flex-1 bg-slate-100 relative overflow-hidden flex flex-col items-center justify-center">
                 {currentFileUrl ? (
                   currentFileUrl.endsWith('.png') ||
-                  currentFileUrl.endsWith('.jpg') ||
-                  currentFileUrl.endsWith('.jpeg') ||
-                  currentFileUrl.startsWith('data:image/') ? (
+                    currentFileUrl.endsWith('.jpg') ||
+                    currentFileUrl.endsWith('.jpeg') ||
+                    currentFileUrl.startsWith('data:image/') ? (
                     <div className="w-full h-full p-4 overflow-auto flex items-center justify-center">
                       <img
                         src={currentFileUrl}

@@ -10,5 +10,6 @@ export const config = {
   matcher: [
     // Protect all /dashboard/* routes
     '/dashboard/:path*',
+    '/preview/:path*',
   ],
 };
