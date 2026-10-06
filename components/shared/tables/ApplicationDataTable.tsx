@@ -27,7 +27,12 @@ import {
     UserCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
+import {
+    APPLICATION_TYPE_UI,
+    ApplicationTypeEnum,
+    APPLICATION_STATUS_UI,
+    getApplicationStatusInfo,
+} from '@/features/front-officer/schemas/application.schema';
 import { formatNopInput, formatShortDate } from '@/lib/utils';
 import { toggleApplicationFavorite, getApplicationReceipt, ApplicationReceiptData } from '@/features/front-officer/actions/application.actions';
 import { removeApplicationFromBundle, claimApplication } from '@/features/verificator/actions/bundle.actions';
@@ -319,10 +324,10 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
 
     const statusOptions = [
         { key: 'ALL', label: 'Semua Status' },
-        { key: 'VERIFYING', label: 'Verifying (Verifikasi)' },
-        { key: 'REVISION', label: 'Revision (Perbaikan)' },
-        { key: 'APPROVED', label: 'Approved (Disetujui)' },
-        { key: 'REJECTED', label: 'Rejected (Ditolak)' },
+        ...Object.entries(APPLICATION_STATUS_UI).map(([key, value]) => ({
+            key,
+            label: value.label,
+        })),
     ];
 
     const bundleFilterOptions: Array<{ key: 'ALL' | 'UNBUNDLED' | 'BUNDLED'; label: string }> = [
@@ -414,7 +419,14 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
         );
     };
 
-
+    const renderStatusBadge = (status: string) => {
+        const config = getApplicationStatusInfo(status);
+        return (
+            <span className={`text-[11px] whitespace-nowrap ${config.badgeStyle}`}>
+                {config.label}
+            </span>
+        );
+    };
 
     const renderSmartgovDate = (dateVal?: Date | string | null) => {
         if (!dateVal) {
@@ -959,9 +971,9 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                         return (
                             <div
                                 key={app.id}
-                                className="bg-white rounded-sm border border-slate-200/80 p-4 py-3 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 lg:gap-4"
+                                className="bg-white rounded-sm border border-slate-200/80 p-4 py-3 shadow-xs hover:border-slate-300 transition-all flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 xl:gap-4 w-full"
                             >
-                                <div className="flex items-center gap-2.5 w-full lg:w-[190px] shrink-0">
+                                <div className="flex items-center gap-2.5 w-full xl:w-[220px] 2xl:w-[260px] min-w-0 shrink-0">
                                     <button
                                         type="button"
                                         disabled={!isFrontOfficer || loadingFavoriteId === app.id}
@@ -1000,22 +1012,22 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                     </div>
                                 </div>
 
-                                <div className="w-full lg:w-[180px] shrink-0">
+                                <div className="w-full xl:w-[175px] shrink-0">
                                     <span className="font-semibold text-slate-800 text-[11px] tracking-tight whitespace-nowrap">
                                         {formattedNop}
                                     </span>
                                 </div>
 
-                                <div className="w-full lg:w-[40px] shrink-0 lg:text-center">
+                                <div className="w-full xl:w-[50px] shrink-0 xl:text-center">
                                     <span
                                         title={typeInfo.title}
-                                        className="text-[11px] font-semibold text-slate-700"
+                                        className={`inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-bold border ${typeInfo.badgeStyle}`}
                                     >
                                         {typeInfo.code}
                                     </span>
                                 </div>
 
-                                <div className="w-full lg:w-[190px] shrink-0 flex flex-col items-center justify-center gap-0.5 text-[11px]">
+                                <div className="w-full xl:w-[200px] shrink-0 flex flex-col items-center justify-center gap-0.5 text-[11px]">
                                     <div className="text-[10px] w-full text-slate-400 font-semibold tracking-tight text-center border-b border-slate-200 pb-1">
                                         Data SmartGov
                                     </div>
@@ -1036,11 +1048,9 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                                         </span>
                                                     </>
                                                 ) : (
-                                                    <>
-                                                        <span title="Tanggal dibuat SmartGov belum diisi" className="block">
-                                                            <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
-                                                        </span>
-                                                    </>
+                                                    <span title="Tanggal dibuat SmartGov belum diisi" className="block">
+                                                        <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                                                    </span>
                                                 )}
                                             </div>
 
@@ -1061,38 +1071,22 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                                         </span>
                                                     </>
                                                 ) : (
-                                                    <>
-                                                        <span title="Tanggal selesai SmartGov belum diisi" className="block">
-                                                            <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
-                                                        </span>
-                                                    </>
+                                                    <span title="Tanggal selesai SmartGov belum diisi" className="block">
+                                                        <Clock className="w-3.5 h-3.5 text-slate-400 mx-auto" />
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="w-full lg:w-[95px] shrink-0 lg:text-center">
-                                    <span
-                                        className={`inline-flex items-center gap-1 font-semibold text-[11px] ${app.status === 'SUBMITTED'
-                                            ? 'text-sky-600'
-                                            : app.status === 'REVISION'
-                                                ? 'text-amber-600'
-                                                : 'text-slate-600'
-                                            }`}
-                                    >
-                                        {app.status === 'SUBMITTED' ? (
-                                            <Clock className="w-3.5 h-3.5 text-sky-500" />
-                                        ) : (
-                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                        )}
-                                        {app.status}
-                                    </span>
+                                <div className="w-full xl:w-[150px] shrink-0 xl:text-center">
+                                    {renderStatusBadge(app.status)}
                                 </div>
 
-                                <div className="hidden lg:block h-6 w-px bg-slate-200/80 shrink-0" />
+                                <div className="hidden xl:block h-6 w-px bg-slate-200/80 shrink-0" />
 
-                                <div className="flex items-center gap-2 justify-between lg:justify-end shrink-0 lg:w-[155px] pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                                <div className="flex items-center gap-2 justify-between xl:justify-end shrink-0 xl:w-[175px] pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
                                     <div className="flex flex-col items-end gap-1">
                                         <span className="font-semibold text-slate-800 text-[11px] whitespace-nowrap">
                                             {app.applicationId}
@@ -1201,21 +1195,7 @@ export function ApplicationDataTable({ applications, actionRole = 'FRONT_OFFICER
                                             </td>
 
                                             <td className="py-2.5 px-3.5 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1 font-semibold text-[11px] ${app.status === 'SUBMITTED'
-                                                        ? 'text-sky-600'
-                                                        : app.status === 'REVISION'
-                                                            ? 'text-amber-600'
-                                                            : 'text-slate-600'
-                                                        }`}
-                                                >
-                                                    {app.status === 'SUBMITTED' ? (
-                                                        <Clock className="w-3.5 h-3.5 text-sky-500" />
-                                                    ) : (
-                                                        <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                                    )}
-                                                    {app.status}
-                                                </span>
+                                                {renderStatusBadge(app.status)}
                                             </td>
 
                                             <td className="py-2.5 px-3.5 whitespace-nowrap">

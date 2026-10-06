@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { BundleDataTable } from '@/components/shared/tables/BundleDataTable';
+import { KtuBundleTable } from '@/features/head-of-administrative-office/components';
 
 export const metadata = {
   title: 'Paraf KTU (Kepala Tata Usaha) — SIPETRA Architax',
@@ -44,7 +44,7 @@ export default async function WorkflowParafKTUPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16">
       <div className="bg-white p-6 rounded-sm border border-slate-200/80 shadow-xs">
         <h1 className="text-xl font-bold text-slate-800 tracking-tight">
           Paraf Kepala Tata Usaha (KTU)
@@ -54,7 +54,7 @@ export default async function WorkflowParafKTUPage() {
         </p>
       </div>
 
-      <BundleDataTable bundles={bundles as any} />
+      <KtuBundleTable bundles={bundles as any} />
     </div>
   );
 }

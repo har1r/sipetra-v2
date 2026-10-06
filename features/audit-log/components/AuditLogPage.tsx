@@ -19,6 +19,7 @@ import {
 import { AuditAction } from '@prisma/client';
 import { AUDIT_ACTION_CONFIG, AuditLogItem } from '../schemas/audit-log.schema';
 import { getAuditLogs, getAuditLogFilterOptions } from '../actions/audit-log.actions';
+import { getApplicationStatusInfo } from '@/features/front-officer/schemas/application.schema';
 import { getInitials } from '@/lib/utils';
 
 interface AuditLogPageProps {
@@ -158,7 +159,7 @@ export default function AuditLogPage({
     selectedYear !== currentDate.getFullYear();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-20">
+    <div className="w-full space-y-6 pb-20">
       {/* Title */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Activity Log</h1>
@@ -452,11 +453,11 @@ export default function AuditLogPage({
                   <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
                     <span className="text-slate-500 font-medium">Status:</span>
                     <span className="font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-sm">
-                      {selectedLog.previousStatus}
+                      {getApplicationStatusInfo(selectedLog.previousStatus).label}
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                     <span className="font-semibold text-slate-900 bg-white border border-slate-300 px-2 py-0.5 rounded-sm">
-                      {selectedLog.newStatus}
+                      {getApplicationStatusInfo(selectedLog.newStatus).label}
                     </span>
                   </div>
                 )}

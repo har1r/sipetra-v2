@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { BundleDataTable } from '@/components/shared/tables/BundleDataTable';
+import { KuptBundleTable } from '@/features/head-of-office/components';
 
 export const metadata = {
   title: 'TTD KUPT (Kepala UPT) — SIPETRA Architax',
@@ -44,7 +44,7 @@ export default async function WorkflowTtdKUPTPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16">
       <div className="bg-white p-6 rounded-sm border border-slate-200/80 shadow-xs">
         <h1 className="text-xl font-bold text-slate-800 tracking-tight">
           Tanda Tangan Kepala UPT (KUPT)
@@ -54,7 +54,7 @@ export default async function WorkflowTtdKUPTPage() {
         </p>
       </div>
 
-      <BundleDataTable bundles={bundles as any} role="HEAD_OF_OFFICE" />
+      <KuptBundleTable bundles={bundles as any} />
     </div>
   );
 }

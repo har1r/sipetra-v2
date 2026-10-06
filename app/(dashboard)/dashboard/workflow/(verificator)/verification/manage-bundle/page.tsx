@@ -3,7 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { BackButton } from '@/components/ui/BackButton';
-import { BundleDataTable } from '@/components/shared/tables/BundleDataTable';
+import { VerificatorBundleTable } from '@/features/verificator/components/VerificatorBundleTable';
 import { CreateBundleButton } from '@/features/verificator/components/CreateBundleButton';
 
 export const metadata = {
@@ -51,7 +51,7 @@ export default async function ManageBundlePage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16">
       <div className="flex flex-col items-start justify-between gap-4 pt-1">
         <BackButton />
         <div className="flex items-start justify-between gap-3.5 w-full">
@@ -69,7 +69,7 @@ export default async function ManageBundlePage() {
         </div>
       </div>
 
-      <BundleDataTable bundles={bundles as any} role="VERIFICATOR" />
+      <VerificatorBundleTable bundles={bundles as any} />
     </div>
   );
 }

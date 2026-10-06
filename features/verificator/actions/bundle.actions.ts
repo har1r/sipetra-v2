@@ -738,4 +738,122 @@ export async function getBundleRecommendationData(bundleIdOrId: string): Promise
     }
 }
 
+/**
+ * Server Action: Mengajukan bundle ke Kepala Tata Usaha (KTU)
+ * Mengubah status permohonan di dalam bundle dari VERIFYING ke ADMINISTRATIVE_OFFICE_HEAD_APPROVING
+ */
+export async function submitBundleToKtu(
+    bundleId: string
+): Promise<ActionResponse<{ bundleId: string; bundleCode: string; count: number }>> {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session || !session.user || !session.user.id) {
+            return {
+                success: false,
+                message: 'Anda harus login terlebih dahulu.',
+            };
+        }
+
+        const allowedRoles: UserRole[] = [UserRole.VERIFICATOR];
+        if (!allowedRoles.includes(session.user.role as UserRole)) {
+            return {
+                success: false,
+                message: 'Hanya Verifikator yang berwenang mengajukan bundle ke KTU.',
+            };
+        }
+
+        const bundle = await prisma.bundle.findUnique({
+            where: { id: bundleId },
+            include: {
+                applications: {
+                    select: {
+                        id: true,
+                        applicationId: true,
+                        status: true,
+                    },
+                },
+            },
+        });
+
+        if (!bundle) {
+            return {
+                success: false,
+                message: 'Data bundle tidak ditemukan.',
+            };
+        }
+
+        const verifyingApps = bundle.applications.filter(
+            (app) => app.status === ApplicationStatus.VERIFYING
+        );
+
+        if (bundle.applications.length === 0) {
+            return {
+                success: false,
+                message: 'Bundle ini belum memiliki permohonan untuk diajukan.',
+            };
+        }
+
+        if (verifyingApps.length === 0) {
+            return {
+                success: false,
+                message: 'Semua permohonan dalam bundle ini telah diajukan atau sudah diproses.',
+            };
+        }
+
+        const appIds = verifyingApps.map((app) => app.id);
+
+        await prisma.application.updateMany({
+            where: {
+                id: { in: appIds },
+                status: ApplicationStatus.VERIFYING,
+            },
+            data: {
+                status: ApplicationStatus.ADMINISTRATIVE_OFFICE_HEAD_APPROVING,
+            },
+        });
+
+        const auditLogs = verifyingApps.map((app) => ({
+            applicationId: app.id,
+            actorId: session.user.id,
+            actorName: session.user.name,
+            actorRole: session.user.role as UserRole,
+            action: AuditAction.VERIFY_APPROVE,
+            previousStatus: ApplicationStatus.VERIFYING,
+            newStatus: ApplicationStatus.ADMINISTRATIVE_OFFICE_HEAD_APPROVING,
+            metadata: {
+                bundleId: bundle.id,
+                bundleCode: bundle.bundleId,
+                submittedTo: 'HEAD_OF_ADMINISTRATIVE_OFFICE',
+            },
+        }));
+
+        await prisma.auditLog.createMany({
+            data: auditLogs,
+        });
+
+        revalidatePath('/dashboard/workflow/verification');
+        revalidatePath('/dashboard/workflow/verification/manage-bundle');
+        revalidatePath('/dashboard/workflow/paraf-ktu');
+        revalidatePath('/dashboard/workflow/bundles');
+        revalidatePath('/dashboard');
+
+        return {
+            success: true,
+            message: `Bundle ${bundle.bundleId} berhasil diajukan ke KTU (${verifyingApps.length} berkas).`,
+            data: {
+                bundleId: bundle.id,
+                bundleCode: bundle.bundleId,
+                count: verifyingApps.length,
+            },
+        };
+    } catch (error) {
+        console.error('Error submitting bundle to KTU:', error);
+        return {
+            success: false,
+            message: 'Terjadi kesalahan saat mengajukan bundle ke KTU.',
+        };
+    }
+}
+
+
 

@@ -56,7 +56,7 @@ export default async function BundleApprovalPage({
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       <BundleApprovalView bundle={bundle as any} />
     </div>
   );

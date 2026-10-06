@@ -103,6 +103,83 @@ export const APPLICATION_TYPE_UI: Record<
     },
 };
 
+export const APPLICATION_STATUS_UI: Record<
+    string,
+    { label: string; shortLabel: string; badgeStyle: string; desc: string }
+> = {
+    VERIFYING: {
+        label: 'Dalam Verifikasi',
+        shortLabel: 'Verifikasi',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas sedang ditelaah dan diverifikasi oleh tim Verifikator.',
+    },
+    ADMINISTRATIVE_OFFICE_HEAD_APPROVING: {
+        label: 'Menunggu Paraf KTU',
+        shortLabel: 'Paraf KTU',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas bundle telaah menunggu peninjauan dan paraf Kepala Tata Usaha.',
+    },
+    OFFICE_HEAD_APPROVING: {
+        label: 'Menunggu Tanda Tangan KUPT',
+        shortLabel: 'TTD KUPT',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas bundle telaah menunggu penandatanganan Kepala Kantor UPT.',
+    },
+    DELIVERING: {
+        label: 'Dalam Pengiriman',
+        shortLabel: 'Pengiriman',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas sedang dalam proses pengiriman dan serah terima dokumen.',
+    },
+    CENTRAL_OFFICE_PROCESSING: {
+        label: 'Dalam Proses Kantor Pusat',
+        shortLabel: 'Kantor Pusat',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas sedang diproses lebih lanjut di Bapenda / Kantor Pusat.',
+    },
+    COMPLETED: {
+        label: 'Selesai',
+        shortLabel: 'Selesai',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Seluruh tahapan pelayanan telah selesai dan output SK telah terbit.',
+    },
+    INTERNAL_REVISION: {
+        label: 'Perlu Perbaikan Internal',
+        shortLabel: 'Perbaikan Internal',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas dikembalikan untuk perbaikan data oleh petugas internal.',
+    },
+    EXTERNAL_REVISION: {
+        label: 'Perlu Perbaikan Wajib Pajak',
+        shortLabel: 'Perbaikan WP',
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: 'Berkas membutuhkan kelengkapan berkas/data tambahan dari Wajib Pajak.',
+    },
+    EXPIRED: {
+        label: 'Kedaluwarsa',
+        shortLabel: 'Kedaluwarsa',
+        badgeStyle: 'text-slate-500 font-semibold',
+        desc: 'Permohonan telah melewati batas waktu SLA toleransi maksimal.',
+    },
+};
+
+export function getApplicationStatusInfo(status?: string | null) {
+    if (!status) {
+        return {
+            label: '-',
+            shortLabel: '-',
+            badgeStyle: 'text-slate-400 font-medium',
+            desc: '',
+        };
+    }
+    return APPLICATION_STATUS_UI[status] || {
+        label: status.replace(/_/g, ' '),
+        shortLabel: status.replace(/_/g, ' '),
+        badgeStyle: 'text-slate-700 font-semibold',
+        desc: '',
+    };
+}
+
 export const taxSubjectSchema = z.object({
     name: optionalString,
     whatsappNumber: optionalString,

@@ -34,7 +34,7 @@ export default async function WorkflowVerifikasiPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-sm border border-slate-200/80 shadow-xs">
         <div>
           <h1 className="text-xl font-bold text-slate-800 tracking-tight">

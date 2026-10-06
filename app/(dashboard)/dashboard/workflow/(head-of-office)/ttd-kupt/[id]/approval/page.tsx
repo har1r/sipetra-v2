@@ -56,7 +56,7 @@ export default async function KuptBundleApprovalPage({
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       <BundleApprovalView bundle={bundle as any} role="HEAD_OF_OFFICE" />
     </div>
   );

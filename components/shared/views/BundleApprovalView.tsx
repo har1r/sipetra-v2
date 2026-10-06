@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
@@ -12,8 +13,11 @@ import {
   Search,
   Layers,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
-import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
+import { APPLICATION_TYPE_UI, ApplicationTypeEnum, getApplicationStatusInfo } from '@/features/front-officer/schemas/application.schema';
+import { approveBundleByKtu } from '@/features/head-of-administrative-office/actions/bundle.actions';
+import { signBundleByKupt } from '@/features/head-of-office/actions/bundle.actions';
 
 export interface BundleApprovalApplicationItem {
   id: string;
@@ -67,13 +71,19 @@ export function BundleApprovalView({
   successMessage,
 }: BundleApprovalViewProps) {
   const isKupt = role === 'HEAD_OF_OFFICE';
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const isInitiallyApproved = isKupt
+    ? bundle.applications.length > 0 && bundle.applications.every((a) => a.status !== 'OFFICE_HEAD_APPROVING')
+    : bundle.applications.length > 0 && bundle.applications.every((a) => a.status !== 'ADMINISTRATIVE_OFFICE_HEAD_APPROVING');
 
   const resolvedBackUrl = backUrl || (isKupt ? '/dashboard/workflow/ttd-kupt' : '/dashboard/workflow/paraf-ktu');
   const resolvedApproveBtn = approveButtonText || (isKupt ? 'Tanda Tangan Seluruh Berkas Bundle' : 'Paraf Seluruh Berkas Bundle');
   const resolvedBadgeText = approvedBadgeText || (isKupt ? 'Sudah Ditandatangani KUPT' : 'Sudah Diparaf KTU');
   const resolvedConfirmMsg = confirmMessage || (isKupt
-    ? `Apakah Anda yakin ingin menandatangani berkas Bundle ${bundle.bundleId}?`
-    : `Apakah Anda yakin ingin memberikan paraf persetujuan KTU untuk Bundle ${bundle.bundleId}?`);
+    ? `Apakah Anda yakin ingin menandatangani keputusan berkas Bundle ${bundle.bundleId}? Status akan berubah menjadi Dalam Pengiriman.`
+    : `Apakah Anda yakin ingin memberikan paraf persetujuan KTU untuk Bundle ${bundle.bundleId}? Berkas akan diteruskan ke KUPT.`);
   const resolvedSuccessMsg = successMessage || (isKupt
     ? `Tanda tangan KUPT untuk Bundle ${bundle.bundleId} berhasil disimpan.`
     : `Paraf KTU untuk Bundle ${bundle.bundleId} berhasil disimpan.`);
@@ -82,7 +92,7 @@ export function BundleApprovalView({
     bundle.applications[0]?.id || ''
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isApproved, setIsApproved] = useState<boolean>(false);
+  const [isApproved, setIsApproved] = useState<boolean>(isInitiallyApproved);
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
 
   const selectedApp =
@@ -123,10 +133,27 @@ export function BundleApprovalView({
   };
 
   const handleApprovalAction = () => {
-    if (window.confirm(resolvedConfirmMsg)) {
-      setIsApproved(true);
-      alert(resolvedSuccessMsg);
-    }
+    if (isApproved || isPending) return;
+    if (!window.confirm(resolvedConfirmMsg)) return;
+
+    startTransition(async () => {
+      try {
+        const res = isKupt
+          ? await signBundleByKupt(bundle.id)
+          : await approveBundleByKtu(bundle.id);
+
+        if (res.success) {
+          setIsApproved(true);
+          alert(res.message || resolvedSuccessMsg);
+          router.refresh();
+        } else {
+          alert(res.message || 'Gagal memproses berkas bundle.');
+        }
+      } catch (err) {
+        console.error('Approval action error:', err);
+        alert('Terjadi kesalahan saat memproses persetujuan berkas.');
+      }
+    });
   };
 
   return (
@@ -161,13 +188,27 @@ export function BundleApprovalView({
           <button
             type="button"
             onClick={handleApprovalAction}
-            className={`inline-flex items-center gap-2 px-4 py-2 font-semibold text-xs rounded-sm shadow-xs transition-all cursor-pointer ${isApproved
-              ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
-              : 'bg-[#00a389] hover:bg-[#008670] text-white'
-              }`}
+            disabled={isApproved || isPending}
+            className={`inline-flex items-center gap-2 px-4 py-2 font-semibold text-xs rounded-sm shadow-xs transition-all cursor-pointer ${
+              isApproved
+                ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed'
+                : isPending
+                ? 'bg-[#00a389]/70 text-white cursor-wait'
+                : 'bg-[#00a389] hover:bg-[#008670] text-white'
+            }`}
           >
-            <ShieldCheck className="w-4 h-4" />
-            <span>{isApproved ? 'Selesai Diproses' : resolvedApproveBtn}</span>
+            {isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-4 h-4" />
+            )}
+            <span>
+              {isPending
+                ? 'Memproses...'
+                : isApproved
+                ? 'Selesai Diproses'
+                : resolvedApproveBtn}
+            </span>
           </button>
         </div>
       </div>
@@ -238,6 +279,12 @@ export function BundleApprovalView({
 
                     <div className="text-[11px] font-semibold text-slate-600 truncate">
                       {applicantName}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] pt-0.5">
+                      <span className="text-slate-500 font-medium">
+                        {getApplicationStatusInfo(app.status).label}
+                      </span>
                     </div>
                   </button>
                 );

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import {
   Search,
   ChevronLeft,
@@ -18,24 +17,55 @@ import {
   FileText,
   Package,
   User,
-  PenTool,
   Printer,
 } from 'lucide-react';
-import { KtuBundleItem } from '@/features/head-of-administrative-office/schemas/bundle.schema';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
 import { formatShortDate } from '@/lib/utils';
 
-export interface BundleDataTableProps {
-  bundles: KtuBundleItem[];
-  role?: 'HEAD_OF_ADMINISTRATIVE_OFFICE' | 'HEAD_OF_OFFICE' | 'VERIFICATOR';
+export interface BundleItem {
+  id: string;
+  bundleId: string;
+  applicationType?: ApplicationTypeEnum | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  createdBy?: {
+    name?: string | null;
+    email?: string | null;
+  } | null;
+  _count?: {
+    applications?: number;
+  };
+  applications?: Array<{
+    id: string;
+    applicationId: string;
+    status: string;
+    smartgovId?: string | null;
+    taxSubject?: {
+      name?: string | null;
+    } | null;
+  }>;
 }
 
-export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE' }: BundleDataTableProps) {
-  const isKupt = role === 'HEAD_OF_OFFICE';
-  const isVerificator = role === 'VERIFICATOR';
-  const approvalUrl = (id: string) => isKupt ? `/dashboard/workflow/ttd-kupt/${id}/approval` : `/dashboard/workflow/paraf-ktu/${id}/approval`;
-  const actionLabel = isKupt ? 'Tanda Tangan Permohonan' : 'Paraf Permohonan';
+export interface BundleDataTableProps {
+  bundles: BundleItem[];
+  renderCardFooter?: (bundle: BundleItem) => React.ReactNode;
+  renderActions?: (bundle: BundleItem, closeMenu: () => void) => React.ReactNode;
+  renderTableRowActions?: (
+    bundle: BundleItem,
+    closeMenu: () => void,
+    isMenuOpen: boolean,
+    toggleMenu: () => void
+  ) => React.ReactNode;
+  toolbarActions?: React.ReactNode;
+}
 
+export function BundleDataTable({
+  bundles,
+  renderCardFooter,
+  renderActions,
+  renderTableRowActions,
+  toolbarActions,
+}: BundleDataTableProps) {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -97,6 +127,29 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
     setOpenMenuId(null);
   };
 
+  const defaultActions = (bundle: BundleItem, closeMenu: () => void) => (
+    <>
+      <a
+        href={`/preview/bundle/${bundle.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={closeMenu}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+      >
+        <Printer className="w-3.5 h-3.5 text-indigo-600" />
+        <span>Cetak Rekomendasi</span>
+      </a>
+      <button
+        type="button"
+        onClick={() => handleCopyBundleId(bundle.bundleId)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
+      >
+        <Copy className="w-3.5 h-3.5 text-slate-600" />
+        <span>Salin ID Bundle</span>
+      </button>
+    </>
+  );
+
   return (
     <div className="space-y-4">
       {/* TOOLBAR CONTROL BAR */}
@@ -155,118 +208,128 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 border text-xs font-semibold rounded-sm transition-all cursor-pointer ${
                 hasActiveFilters || isFilterOpen
                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                  : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700'
+                  : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-700'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>More Filters</span>
+              <span>Filter</span>
               {hasActiveFilters && (
-                <span className="w-2 h-2 rounded-full bg-[#00a389] shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-[#00a389] ml-0.5" />
               )}
             </button>
 
             {isFilterOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-[360px] max-w-[calc(100vw-2rem)] bg-white border border-slate-200/90 rounded-sm shadow-xl p-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100">
-                    Jenis Permohonan (Application Type)
-                  </div>
-                  <div className="flex flex-col gap-0.5 max-h-[240px] overflow-y-auto pr-1 scrollbar-none">
-                    {typeOptions.map((type) => (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsFilterOpen(false)}
+                />
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-sm shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-800">Filter Data</span>
+                    {hasActiveFilters && (
                       <button
-                        key={type.key}
                         type="button"
-                        onClick={() => setSelectedType(type.key)}
-                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-left ${
-                          selectedType === type.key
-                            ? 'bg-slate-100 text-slate-900 font-bold'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                        }`}
+                        onClick={resetFilters}
+                        className="text-[11px] font-semibold text-[#00a389] hover:underline cursor-pointer"
                       >
-                        <span className="truncate">{type.label}</span>
-                        {selectedType === type.key && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#00a389] shrink-0 ml-2" />
-                        )}
+                        Reset
                       </button>
-                    ))}
+                    )}
+                  </div>
+
+                  <div className="py-2.5 space-y-2">
+                    <label className="block text-[11px] font-bold text-slate-600">
+                      Jenis Permohonan
+                    </label>
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                      {typeOptions.map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setSelectedType(opt.key)}
+                          className={`w-full text-left px-2 py-1.5 rounded-sm text-xs transition-colors cursor-pointer flex items-center justify-between ${
+                            selectedType === opt.key
+                              ? 'bg-slate-900 text-white font-semibold'
+                              : 'text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {selectedType === opt.key && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00a389]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-
-                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
-                  >
-                    Reset Filter
-                  </button>
-                  <span className="text-[11px] font-medium text-slate-400">
-                    {filteredBundles.length} bundle
-                  </span>
-                </div>
-              </div>
+              </>
             )}
           </div>
+
+          {toolbarActions}
         </div>
 
-        <div className="flex items-center gap-2 justify-end">
-          <div className="flex items-center p-1 bg-slate-100/80 rounded-sm border border-slate-200/60">
-            <button
-              type="button"
-              onClick={() => setViewMode('cards')}
-              className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'cards'
-                  ? 'bg-white text-slate-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-              title="Tampilan Kartu"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-sm text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'table'
-                  ? 'bg-white text-slate-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-              title="Tampilan Tabel"
-            >
-              <TableIcon className="w-4 h-4" />
-            </button>
+        {/* CONTROLS KANAN: STATS & VIEW SWITCHER */}
+        <div className="flex items-center justify-between lg:justify-end gap-3 border-t lg:border-t-0 pt-2 lg:pt-0 border-slate-100">
+          <div className="text-xs text-slate-500 font-semibold">
+            Menampilkan <span className="font-bold text-slate-900">{filteredBundles.length}</span> bundle
           </div>
 
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold rounded-sm transition-all cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            Export to csv
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-sm border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-xs transition-all cursor-pointer ${
+                  viewMode === 'cards'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Tampilan Kartu"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-xs transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Tampilan Tabel"
+              >
+                <TableIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-600 rounded-sm transition-colors cursor-pointer"
+              title="Unduh Data"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* CONTENT DATA WORKSPACE */}
+      {/* HASIL FILTER / EMPTY STATE */}
       {filteredBundles.length === 0 ? (
-        <div className="bg-white rounded-sm border border-slate-200/80 p-12 text-center space-y-3 shadow-xs">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-            <Layers className="w-6 h-6" />
-          </div>
-          <h3 className="text-sm font-bold text-slate-700">
-            {hasActiveFilters ? 'Tidak Ada Bundle Ditemukan' : 'Belum Ada Bundle Telaah'}
-          </h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+        <div className="bg-white rounded-sm border border-slate-200/80 p-12 text-center shadow-xs">
+          <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-slate-800">Tidak ada bundle ditemukan</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
             {hasActiveFilters
-              ? 'Tidak ada data bundle yang sesuai dengan filter atau kata kunci yang dipilih.'
-              : 'Belum ada bundle berkas telaah yang diajukan oleh tim verifikator.'}
+              ? 'Coba sesuaikan kata kunci pencarian atau filter yang Anda pilih.'
+              : 'Belum ada data bundle permohonan yang tersedia.'}
           </p>
           {hasActiveFilters && (
             <button
               type="button"
               onClick={resetFilters}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-sm transition-colors shadow-xs cursor-pointer"
+              className="mt-4 px-3.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-sm hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Reset Filter
             </button>
@@ -274,7 +337,7 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
         </div>
       ) : viewMode === 'cards' ? (
         /* MODE KARTU */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredBundles.map((bundle) => {
             const dateParts = getDateParts(bundle.createdAt);
             const appCount = bundle._count?.applications ?? bundle.applications?.length ?? 0;
@@ -322,34 +385,9 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                          <a
-                            href={`/preview/bundle/${bundle.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setOpenMenuId(null)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
-                          >
-                            <Printer className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Cetak Rekomendasi</span>
-                          </a>
-                          {!isVerificator && (
-                            <Link
-                              href={approvalUrl(bundle.id)}
-                              onClick={() => setOpenMenuId(null)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
-                            >
-                              <PenTool className="w-3.5 h-3.5 text-[#00a389]" />
-                              <span>{actionLabel}</span>
-                            </Link>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleCopyBundleId(bundle.bundleId)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
-                          >
-                            <Copy className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Salin ID Bundle</span>
-                          </button>
+                          {renderActions
+                            ? renderActions(bundle, () => setOpenMenuId(null))
+                            : defaultActions(bundle, () => setOpenMenuId(null))}
                         </div>
                       </>
                     )}
@@ -386,6 +424,12 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                       {bundle.createdBy?.name || '-'}
                     </span>
                   </div>
+
+                  {renderCardFooter && (
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      {renderCardFooter(bundle)}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -460,54 +504,38 @@ export function BundleDataTable({ bundles, role = 'HEAD_OF_ADMINISTRATIVE_OFFICE
                       </td>
 
                       <td className="py-2.5 px-3.5 whitespace-nowrap text-center">
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            onClick={() => setOpenMenuId(openMenuId === bundle.id ? null : bundle.id)}
-                            className="p-1 rounded-sm text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                        {renderTableRowActions ? (
+                          renderTableRowActions(
+                            bundle,
+                            () => setOpenMenuId(null),
+                            openMenuId === bundle.id,
+                            () => setOpenMenuId(openMenuId === bundle.id ? null : bundle.id)
+                          )
+                        ) : (
+                          <div className="relative inline-block text-left">
+                            <button
+                              type="button"
+                              onClick={() => setOpenMenuId(openMenuId === bundle.id ? null : bundle.id)}
+                              className="p-1 rounded-sm text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
 
-                          {openMenuId === bundle.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => setOpenMenuId(null)}
-                              />
-                              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left">
-                                <a
-                                  href={`/preview/bundle/${bundle.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                            {openMenuId === bundle.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
                                   onClick={() => setOpenMenuId(null)}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
-                                >
-                                  <Printer className="w-3.5 h-3.5 text-indigo-600" />
-                                  <span>Cetak Rekomendasi</span>
-                                </a>
-                                {!isVerificator && (
-                                  <Link
-                                    href={approvalUrl(bundle.id)}
-                                    onClick={() => setOpenMenuId(null)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
-                                  >
-                                    <PenTool className="w-3.5 h-3.5 text-[#00a389]" />
-                                    <span>{actionLabel}</span>
-                                  </Link>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyBundleId(bundle.bundleId)}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left border-t border-slate-100"
-                                >
-                                  <Copy className="w-3.5 h-3.5 text-slate-600" />
-                                  <span>Salin ID Bundle</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                                />
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left">
+                                  {renderActions
+                                    ? renderActions(bundle, () => setOpenMenuId(null))
+                                    : defaultActions(bundle, () => setOpenMenuId(null))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

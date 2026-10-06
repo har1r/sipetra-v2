@@ -1,0 +1,1 @@
+export { KtuBundleTable } from './KtuBundleTable';
