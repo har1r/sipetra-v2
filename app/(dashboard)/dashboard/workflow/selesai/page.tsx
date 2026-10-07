@@ -1,11 +1,29 @@
-"use client";
-
 import React from 'react';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 import { CheckCircle2, Award, FileCheck2, Send, Download } from 'lucide-react';
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
 
-export default function SelesaiPage() {
+export const metadata = {
+  title: 'Permohonan Selesai — SIPETRA Architax',
+  description: 'Pengajuan telah selesai diproses, dokumen output (SK/Surat Ketetapan) diterbitkan, dan WP diinformasikan.',
+};
+
+export default async function SelesaiPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user) {
+    redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'selesai')) {
+    return <UnauthorizedView stage="selesai" userRole={session.user.role} />;
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">

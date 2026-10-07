@@ -411,7 +411,7 @@ export default function Sidebar() {
                   onMouseLeave={() => setActivePopover(null)}
                 >
                   <button
-                    onClick={() => navigate('/dashboard/workflow/pengajuan')}
+                    onClick={() => navigate('/dashboard/workflow/submission')}
                     className={`w-10 h-10 rounded-sm flex items-center justify-center transition-all cursor-pointer ${isWorkflowActive
                       ? 'bg-[#00a389] text-white shadow-sm ring-2 ring-[#00a389]/20'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'

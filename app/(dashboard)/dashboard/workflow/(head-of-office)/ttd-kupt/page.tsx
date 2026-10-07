@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { KuptBundleTable } from '@/features/head-of-office/components';
 
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
+
 export const metadata = {
   title: 'TTD KUPT (Kepala UPT) — SIPETRA Architax',
   description: 'Tinjau kelayakan dan tanda tangani berkas bundle telaah permohonan pajak daerah.',
@@ -14,6 +17,10 @@ export default async function WorkflowTtdKUPTPage() {
 
   if (!session || !session.user) {
     redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'ttd-kupt')) {
+    return <UnauthorizedView stage="ttd-kupt" userRole={session.user.role} />;
   }
 
   const bundles = await prisma.bundle.findMany({

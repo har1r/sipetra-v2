@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { Layers } from 'lucide-react';
 import { ApplicationDataTable } from '@/components/shared/tables/ApplicationDataTable';
 
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
+
 export const metadata = {
   title: 'Verifikasi Permohonan — SIPETRA Architax',
   description: 'Verifikasi kelengkapan berkas permohonan pajak daerah dan kelola bundle telaah.',
@@ -16,6 +19,10 @@ export default async function WorkflowVerifikasiPage() {
 
   if (!session || !session.user) {
     redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'verification')) {
+    return <UnauthorizedView stage="verification" userRole={session.user.role} />;
   }
 
   const applications = await prisma.application.findMany({

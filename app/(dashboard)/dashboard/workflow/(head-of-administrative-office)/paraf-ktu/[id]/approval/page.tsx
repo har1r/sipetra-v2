@@ -4,6 +4,9 @@ import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { BundleApprovalView } from '@/components/shared/views/BundleApprovalView';
 
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
+
 export const metadata = {
   title: 'Approval & Paraf Bundle — SIPETRA Architax',
   description: 'Evaluasi dan paraf berkas telaah permohonan dalam bundle.',
@@ -18,6 +21,10 @@ export default async function BundleApprovalPage({
 
   if (!session || !session.user) {
     redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'paraf-ktu')) {
+    return <UnauthorizedView stage="paraf-ktu" userRole={session.user.role} />;
   }
 
   const { id } = await params;

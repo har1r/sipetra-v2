@@ -6,6 +6,9 @@ import { BackButton } from '@/components/ui/BackButton';
 import { VerificatorBundleTable } from '@/features/verificator/components/VerificatorBundleTable';
 import { CreateBundleButton } from '@/features/verificator/components/CreateBundleButton';
 
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
+
 export const metadata = {
   title: 'Manajemen Bundle Telaah — SIPETRA Architax',
   description: 'Kelola dan kelompokkan berkas permohonan yang telah diverifikasi ke dalam bundle telaah.',
@@ -16,6 +19,10 @@ export default async function ManageBundlePage() {
 
   if (!session || !session.user) {
     redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'verification')) {
+    return <UnauthorizedView stage="verification" userRole={session.user.role} />;
   }
 
   const bundles = await prisma.bundle.findMany({

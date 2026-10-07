@@ -1,11 +1,29 @@
-"use client";
-
 import React from 'react';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 import { Send, Clock, CheckSquare, PackageCheck } from 'lucide-react';
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
 
-export default function PengirimanPage() {
+export const metadata = {
+  title: 'Pengiriman Berkas — SIPETRA Architax',
+  description: 'Pengecekan kelengkapan akhir dokumen oleh Pengirim sebelum diserahkan ke Kantor Pusat.',
+};
+
+export default async function PengirimanPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user) {
+    redirect('/login');
+  }
+
+  if (!hasStageAccess(session.user.role, 'pengiriman')) {
+    return <UnauthorizedView stage="pengiriman" userRole={session.user.role} />;
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">

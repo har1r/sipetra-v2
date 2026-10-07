@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { ApplicationDataTable } from '@/components/shared/tables/ApplicationDataTable';
 
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
+
 export const metadata = {
   title: 'Pengajuan Permohonan (Submission) — SIPETRA Architax',
   description: 'Daftar permohonan yang diajukan dan draf pengajuan baru.',
@@ -17,6 +20,11 @@ export default async function WorkflowSubmissionPage() {
   if (!session || !session.user) {
     redirect('/login');
   }
+
+  if (!hasStageAccess(session.user.role, 'submission')) {
+    return <UnauthorizedView stage="submission" userRole={session.user.role} />;
+  }
+
 
   const applications = await prisma.application.findMany({
     orderBy: {

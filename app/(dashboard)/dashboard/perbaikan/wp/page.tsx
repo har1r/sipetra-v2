@@ -1,11 +1,23 @@
-"use client";
-
 import React from 'react';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 import { PauseCircle, Bell, CalendarX, UserCheck } from 'lucide-react';
 
-export default function PerbaikanWPPage() {
+export const metadata = {
+  title: 'Perbaikan Wajib Pajak (WP) — SIPETRA Architax',
+  description: 'Daftar permohonan yang dikembalikan ke WP karena kekurangan berkas/dokumen pendukung.',
+};
+
+export default async function PerbaikanWPPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user) {
+    redirect('/login');
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">

@@ -6,6 +6,8 @@ import { ApplicationForm } from '@/features/front-officer/components/Application
 import { AlertCircle } from 'lucide-react';
 import { BackButton } from '@/components/ui/BackButton';
 import { formatNopInput } from '@/lib/utils';
+import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
+import { hasStageAccess } from '@/lib/rbac';
 
 export const metadata = {
     title: 'Duplikasi Permohonan PBB-P2',
@@ -19,8 +21,12 @@ interface DuplicateApplicationPageProps {
 export default async function DuplicateApplicationPage({ params }: DuplicateApplicationPageProps) {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    if (!session || !session.user) {
         redirect('/login');
+    }
+
+    if (!hasStageAccess(session.user.role, 'submission')) {
+        return <UnauthorizedView stage="submission" userRole={session.user.role} />;
     }
 
     const { id } = await params;
