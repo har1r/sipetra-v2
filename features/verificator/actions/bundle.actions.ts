@@ -16,30 +16,30 @@ export type ActionResponse<T = unknown> = {
 
 async function generateUniqueBundleCode(): Promise<string> {
     const currentYear = new Date().getFullYear();
-    const count = await prisma.bundle.count({
+    const latestBundle = await prisma.bundle.findFirst({
         where: {
             bundleId: {
                 endsWith: `/${currentYear}`,
             },
         },
+        orderBy: {
+            createdAt: 'desc',
+        },
+        select: {
+            bundleId: true,
+        },
     });
 
-    let nextNumber = count + 1;
-    let isUnique = false;
-    let candidate = '';
-
-    while (!isUnique) {
-        const paddedNum = String(nextNumber).padStart(3, '0');
-        candidate = `973/${paddedNum}-UPT.PD.WIL.IV/${currentYear}`;
-        const existing = await prisma.bundle.findUnique({ where: { bundleId: candidate } });
-        if (!existing) {
-            isUnique = true;
-        } else {
-            nextNumber++;
+    let nextNumber = 1;
+    if (latestBundle?.bundleId) {
+        const match = latestBundle.bundleId.match(/973\/(\d+)-/);
+        if (match) {
+            nextNumber = parseInt(match[1], 10) + 1;
         }
     }
 
-    return candidate;
+    const paddedNum = String(nextNumber).padStart(3, '0');
+    return `973/${paddedNum}-UPT.PD.WIL.IV/${currentYear}`;
 }
 
 export async function getAvailableBundles(applicationType?: ApplicationType): Promise<ActionResponse<any[]>> {
@@ -84,7 +84,8 @@ export async function getAvailableBundles(applicationType?: ApplicationType): Pr
 }
 
 export async function getUnbundledApplications(
-    applicationType?: ApplicationType
+    applicationType?: ApplicationType,
+    limit: number = 100
 ): Promise<ActionResponse<any[]>> {
     try {
         const whereClause: any = {
@@ -102,6 +103,7 @@ export async function getUnbundledApplications(
         const apps = await prisma.application.findMany({
             where: whereClause,
             orderBy: { createdAt: 'desc' },
+            take: limit,
             select: {
                 id: true,
                 applicationId: true,
@@ -125,36 +127,6 @@ export async function getUnbundledApplications(
             message: 'Gagal memuat permohonan tanpa bundle.',
             data: [],
         };
-    }
-}
-
-export async function getApplicationsForVerification(): Promise<any[]> {
-    try {
-        const applications = await prisma.application.findMany({
-            orderBy: {
-                updatedAt: 'desc',
-            },
-            include: {
-                bundle: {
-                    select: {
-                        id: true,
-                        bundleId: true,
-                        applicationType: true,
-                    },
-                },
-                frontOfficer: {
-                    select: {
-                        name: true,
-                        email: true,
-                    },
-                },
-            },
-        });
-
-        return applications;
-    } catch (error) {
-        console.error('Error fetching applications for verification:', error);
-        return [];
     }
 }
 
@@ -221,55 +193,72 @@ export async function createBundle(
             }
         }
 
-        const newBundle = await prisma.bundle.create({
-            data: {
-                bundleId: finalBundleId,
-                applicationType: validData.applicationType,
-                createdById: session.user.id,
-            },
-        });
-
-        if (validData.applicationIds && validData.applicationIds.length > 0) {
-            for (const appId of validData.applicationIds) {
-                const app = await prisma.application.findUnique({ where: { id: appId } });
-                if (app) {
-                    const newStatus = ApplicationStatus.VERIFYING;
-
-                    const updateResult = await prisma.application.updateMany({
-                        where: {
-                            id: appId,
-                            OR: [
-                                { bundleId: null },
-                                { bundleId: { isSet: false } },
-                            ],
-                        },
-                        data: {
-                            bundleId: newBundle.id,
-                            verificatorId: session.user.id,
-                            status: newStatus,
-                        },
-                    });
-
-                    if (updateResult.count > 0) {
-                        await prisma.auditLog.create({
-                            data: {
-                                applicationId: appId,
-                                actorId: session.user.id,
-                                actorName: session.user.name,
-                                actorRole: session.user.role as UserRole,
-                                action: AuditAction.CREATE_BUNDLE,
-                                previousStatus: app.status,
-                                newStatus: newStatus,
-                                metadata: {
-                                    bundleId: newBundle.id,
-                                    bundleCode: newBundle.bundleId,
-                                    applicationType: newBundle.applicationType,
-                                },
-                            },
-                        });
-                    }
+        let newBundle;
+        let attempts = 0;
+        while (!newBundle && attempts < 3) {
+            try {
+                newBundle = await prisma.bundle.create({
+                    data: {
+                        bundleId: finalBundleId,
+                        applicationType: validData.applicationType,
+                        createdById: session.user.id,
+                    },
+                });
+            } catch (err: any) {
+                if (err?.code === 'P2002' && !validData.bundleId) {
+                    attempts++;
+                    const match = finalBundleId.match(/973\/(\d+)-/);
+                    const nextNum = (match ? parseInt(match[1], 10) : 1) + attempts;
+                    finalBundleId = `973/${String(nextNum).padStart(3, '0')}-UPT.PD.WIL.IV/${new Date().getFullYear()}`;
+                } else {
+                    throw err;
                 }
             }
+        }
+
+        if (!newBundle) {
+            return {
+                success: false,
+                message: 'Gagal menghasilkan nomor bundle unik, silakan coba kembali.',
+            };
+        }
+
+        if (validData.applicationIds && validData.applicationIds.length > 0) {
+            const targetAppIds = validData.applicationIds;
+
+            await prisma.application.updateMany({
+                where: {
+                    id: { in: targetAppIds },
+                    OR: [
+                        { bundleId: null },
+                        { bundleId: { isSet: false } },
+                    ],
+                },
+                data: {
+                    bundleId: newBundle.id,
+                    verificatorId: session.user.id,
+                    status: ApplicationStatus.VERIFYING,
+                },
+            });
+
+            const auditLogs = targetAppIds.map((appId) => ({
+                applicationId: appId,
+                actorId: session.user.id,
+                actorName: session.user.name,
+                actorRole: session.user.role as UserRole,
+                action: AuditAction.CREATE_BUNDLE,
+                previousStatus: ApplicationStatus.VERIFYING,
+                newStatus: ApplicationStatus.VERIFYING,
+                metadata: {
+                    bundleId: newBundle.id,
+                    bundleCode: newBundle.bundleId,
+                    applicationType: newBundle.applicationType,
+                },
+            }));
+
+            await prisma.auditLog.createMany({
+                data: auditLogs,
+            });
         }
 
         revalidatePath('/dashboard/workflow/verification');
@@ -371,15 +360,14 @@ export async function assignApplicationsToBundle(
             });
         }
 
+        const unassignedApps = apps.filter((a) => !a.bundleId);
+        const unassignedAppIds = unassignedApps.map((a) => a.id);
         let assignedCount = 0;
-        for (const app of apps) {
-            if (app.bundleId) continue;
 
-            const newStatus = ApplicationStatus.VERIFYING;
-
-            const updateResult = await prisma.application.updateMany({
+        if (unassignedAppIds.length > 0) {
+            const updateRes = await prisma.application.updateMany({
                 where: {
-                    id: app.id,
+                    id: { in: unassignedAppIds },
                     OR: [
                         { bundleId: null },
                         { bundleId: { isSet: false } },
@@ -388,27 +376,30 @@ export async function assignApplicationsToBundle(
                 data: {
                     bundleId: bundle.id,
                     verificatorId: session.user.id,
-                    status: newStatus,
+                    status: ApplicationStatus.VERIFYING,
                 },
             });
 
-            if (updateResult.count > 0) {
-                assignedCount++;
-                await prisma.auditLog.create({
-                    data: {
-                        applicationId: app.id,
-                        actorId: session.user.id,
-                        actorName: session.user.name,
-                        actorRole: session.user.role as UserRole,
-                        action: AuditAction.ASSIGN_BUNDLE,
-                        previousStatus: app.status,
-                        newStatus: newStatus,
-                        metadata: {
-                            bundleId: bundle.id,
-                            bundleCode: bundle.bundleId,
-                            applicationType: bundle.applicationType || app.applicationType,
-                        },
+            assignedCount = updateRes.count;
+
+            if (assignedCount > 0) {
+                const auditLogs = unassignedApps.map((app) => ({
+                    applicationId: app.id,
+                    actorId: session.user.id,
+                    actorName: session.user.name,
+                    actorRole: session.user.role as UserRole,
+                    action: AuditAction.ASSIGN_BUNDLE,
+                    previousStatus: app.status,
+                    newStatus: ApplicationStatus.VERIFYING,
+                    metadata: {
+                        bundleId: bundle.id,
+                        bundleCode: bundle.bundleId,
+                        applicationType: bundle.applicationType || app.applicationType,
                     },
+                }));
+
+                await prisma.auditLog.createMany({
+                    data: auditLogs,
                 });
             }
         }
@@ -436,26 +427,7 @@ export async function assignApplicationsToBundle(
     }
 }
 
-export async function addApplicationToBundle(
-    applicationId: string,
-    bundleId: string
-): Promise<ActionResponse<{ id: string; bundleId: string }>> {
-    const res = await assignApplicationsToBundle([applicationId], bundleId);
-    if (res.success && res.data) {
-        return {
-            success: true,
-            message: res.message,
-            data: {
-                id: applicationId,
-                bundleId: res.data.bundleId,
-            },
-        };
-    }
-    return {
-        success: false,
-        message: res.message || 'Gagal memasukkan permohonan ke dalam bundle.',
-    };
-}
+
 
 /**
  * Server Action: Mengeluarkan permohonan dari bundle (Remove from Bundle)
@@ -554,104 +526,7 @@ export async function removeApplicationFromBundle(
     }
 }
 
-/**
- * Server Action: Mengklaim permohonan secara mandiri oleh Verifikator
- */
-export async function claimApplication(
-    applicationId: string
-): Promise<ActionResponse<{ id: string; status: string }>> {
-    try {
-        const session = await getServerSession(authOptions);
-        if (!session || !session.user || !session.user.id) {
-            return {
-                success: false,
-                message: 'Anda harus login terlebih dahulu.',
-            };
-        }
 
-        const allowedRoles: UserRole[] = [UserRole.VERIFICATOR];
-        if (!allowedRoles.includes(session.user.role as UserRole)) {
-            return {
-                success: false,
-                message: 'Hanya Verifikator yang dapat mengklaim permohonan.',
-            };
-        }
-
-        const app = await prisma.application.findUnique({
-            where: { id: applicationId },
-        });
-
-        if (!app) {
-            return {
-                success: false,
-                message: 'Data permohonan tidak ditemukan.',
-            };
-        }
-
-        const updateResult = await prisma.application.updateMany({
-            where: {
-                id: applicationId,
-                verificatorId: null,
-            },
-            data: {
-                verificatorId: session.user.id,
-                status: ApplicationStatus.VERIFYING,
-            },
-        });
-
-        if (updateResult.count === 0) {
-            return {
-                success: false,
-                message: 'Permohonan ini baru saja diklaim atau diproses oleh Verifikator lain.',
-            };
-        }
-
-        const updatedApp = await prisma.application.update({
-            where: { id: applicationId },
-            data: {
-                verificatorId: session.user.id,
-                status: ApplicationStatus.VERIFYING,
-            },
-        });
-
-        await prisma.auditLog.create({
-            data: {
-                applicationId: app.id,
-                actorId: session.user.id,
-                actorName: session.user.name,
-                actorRole: session.user.role as UserRole,
-                action: AuditAction.CLAIM,
-                previousStatus: app.status,
-                newStatus: ApplicationStatus.VERIFYING,
-                metadata: {
-                    applicationId: app.applicationId,
-                    claimedBy: session.user.name,
-                },
-            },
-        });
-
-        revalidatePath('/dashboard/workflow/verification');
-        revalidatePath('/dashboard/workflow/verification/manage-bundle');
-        revalidatePath('/dashboard/workflow/submission');
-        revalidatePath('/dashboard/workflow/applications');
-        revalidatePath('/dashboard');
-
-        return {
-            success: true,
-            message: `Permohonan #${app.applicationId} berhasil diklaim.`,
-            data: {
-                id: updatedApp.id,
-                status: updatedApp.status,
-            },
-        };
-    } catch (error) {
-        console.error('Error claiming application:', error);
-        return {
-            success: false,
-            message: 'Terjadi kesalahan saat mengklaim permohonan.',
-        };
-    }
-}
 
 export async function getBundleRecommendationData(bundleIdOrId: string): Promise<ActionResponse<any>> {
     try {
@@ -742,7 +617,7 @@ export async function getBundleRecommendationData(bundleIdOrId: string): Promise
  * Server Action: Mengajukan bundle ke Kepala Tata Usaha (KTU)
  * Mengubah status permohonan di dalam bundle dari VERIFYING ke ADMINISTRATIVE_OFFICE_HEAD_APPROVING
  */
-export async function submitBundleToKtu(
+export async function submitBundleToHeadOfAdministrativeOffice(
     bundleId: string
 ): Promise<ActionResponse<{ bundleId: string; bundleCode: string; count: number }>> {
     try {
@@ -827,9 +702,13 @@ export async function submitBundleToKtu(
             },
         }));
 
-        await prisma.auditLog.createMany({
-            data: auditLogs,
-        });
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < auditLogs.length; i += CHUNK_SIZE) {
+            const chunk = auditLogs.slice(i, i + CHUNK_SIZE);
+            await prisma.auditLog.createMany({
+                data: chunk,
+            });
+        }
 
         revalidatePath('/dashboard/workflow/verification');
         revalidatePath('/dashboard/workflow/verification/manage-bundle');
@@ -847,7 +726,7 @@ export async function submitBundleToKtu(
             },
         };
     } catch (error) {
-        console.error('Error submitting bundle to KTU:', error);
+        console.error('Error submitting bundle to Head of Administrative Office:', error);
         return {
             success: false,
             message: 'Terjadi kesalahan saat mengajukan bundle ke KTU.',

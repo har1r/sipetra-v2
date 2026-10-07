@@ -41,7 +41,7 @@ export default async function WorkflowVerifikasiPage() {
             Verifikasi Permohonan
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Periksa dan validasi dokumen permohonan pajak daerah, kelompokkan ke dalam bundle telaah, dan teruskan ke tahapan paraf KTU.
+            Periksa dan validasi dokumen permohonan layanan PBB-P2, kelompokkan ke dalam bundle, dan ajukan ke KTU.
           </p>
         </div>
 

@@ -120,7 +120,7 @@ export const APPLICATION_STATUS_UI: Record<
         desc: 'Berkas bundle telaah menunggu peninjauan dan paraf Kepala Tata Usaha.',
     },
     OFFICE_HEAD_APPROVING: {
-        label: 'Menunggu Tanda Tangan KUPT',
+        label: 'Menunggu Ttd KUPT',
         shortLabel: 'TTD KUPT',
         badgeStyle: 'text-slate-700 font-semibold',
         desc: 'Berkas bundle telaah menunggu penandatanganan Kepala Kantor UPT.',

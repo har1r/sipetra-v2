@@ -11,12 +11,7 @@ export const bundleCreateSchema = z.object({
 
 export type BundleCreateInput = z.infer<typeof bundleCreateSchema>;
 
-export const assignBundleSchema = z.object({
-  applicationId: z.string().min(1, 'ID Permohonan wajib diisi'),
-  bundleId: z.string().min(1, 'Bundle wajib dipilih'),
-});
 
-export type AssignBundleInput = z.infer<typeof assignBundleSchema>;
 
 export interface BundleSummaryItem {
   id: string;

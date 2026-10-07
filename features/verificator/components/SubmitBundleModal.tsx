@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { KtuBundleItem } from '@/features/head-of-administrative-office/schemas/bundle.schema';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
-import { submitBundleToKtu } from '../actions/bundle.actions';
+import { submitBundleToHeadOfAdministrativeOffice } from '../actions/bundle.actions';
 
 interface SubmitBundleModalProps {
   bundle: KtuBundleItem | null;
@@ -50,7 +50,7 @@ export function SubmitBundleModal({
   const handleSubmit = () => {
     setServerError(null);
     startTransition(async () => {
-      const res = await submitBundleToKtu(bundle.id);
+      const res = await submitBundleToHeadOfAdministrativeOffice(bundle.id);
       if (res.success) {
         onSuccess?.();
         onClose();

@@ -57,10 +57,10 @@ export default async function ManageBundlePage() {
         <div className="flex items-start justify-between gap-3.5 w-full">
           <div>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-              Manajemen Bundle Telaah
+              Manajemen Bundel
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Kelola pengelompokan berkas permohonan ke dalam bundle telaah dan pantau proses verifikasi sebelum diteruskan ke tahapan Paraf KTU.
+              Kelola pengelompokan berkas permohonan ke dalam bundel dan pantau proses verifikasi sebelum diteruskan ke tahapan Paraf KTU.
             </p>
           </div>
           <div className="shrink-0">

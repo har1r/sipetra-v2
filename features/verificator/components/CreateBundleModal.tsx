@@ -4,13 +4,13 @@ import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     X,
-    Layers,
     Search,
     Loader2,
     CheckCircle2,
     AlertCircle,
     Check,
     FolderClock,
+    Package
 } from 'lucide-react';
 import { ApplicationType } from '@prisma/client';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum } from '@/features/front-officer/schemas/application.schema';
@@ -161,8 +161,8 @@ export function CreateBundleModal({
             <div className="relative bg-white rounded-md shadow-2xl max-w-lg w-full my-6 overflow-hidden border border-slate-200 z-10 animate-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-b border-slate-200">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 bg-[#00a389]/10 text-[#00a389] rounded-sm">
-                            <Layers className="w-4 h-4" />
+                        <div>
+                            <Package className="w-5 h-5 text-[#00a389]" />
                         </div>
                         <div>
                             <h3 className="text-sm font-bold text-slate-800">
@@ -240,7 +240,7 @@ export function CreateBundleModal({
                                         : `Masukkan ${selectedAppIds.length} berkas ke Bundle ${emptyBundles[0].bundleId}`
                                 }
                             >
-                                <span>Gunakan Bundle Ini ({selectedAppIds.length})</span>
+                                <span>Gunakan Bundel Ini ({selectedAppIds.length})</span>
                             </button>
                         </div>
                     )}
@@ -248,7 +248,7 @@ export function CreateBundleModal({
                     <div className="space-y-2 pt-1">
                         <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-bold text-slate-700">
-                                Daftar Permohonan Tanpa Bundle
+                                Masukkan permohonan ke dalam bundel
                             </span>
                             {filteredApplications.length > 0 && (
                                 <button
