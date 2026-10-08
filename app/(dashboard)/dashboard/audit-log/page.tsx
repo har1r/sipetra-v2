@@ -30,7 +30,6 @@ export default async function DashboardAuditLogPage() {
     <AuditLogPage
       initialLogs={logsResult.data || []}
       initialUsers={optionsResult.users || []}
-      initialApplications={optionsResult.applications || []}
     />
   );
 }

@@ -3,21 +3,54 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { AuditLogFilterInput, auditLogFilterSchema, AuditLogItem } from '../schemas/audit-log.schema';
-import { AuditAction } from '@prisma/client';
+import { AuditLogFilterInput, auditLogFilterSchema } from '../schemas/audit-log.schema';
+import { AuditAction, Prisma } from '@prisma/client';
 
 export type ActionResponse<T = unknown> = {
   success: boolean;
   message?: string;
   data?: T;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
 };
+
+const auditLogInclude = Prisma.validator<Prisma.AuditLogInclude>()({
+  application: {
+    select: {
+      id: true,
+      applicationId: true,
+      applicationType: true,
+      status: true,
+      requestedNop: true,
+      taxSubject: true,
+      taxObject: true,
+    },
+  },
+  actor: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  },
+});
+
+export type AuditLogWithRelations = Prisma.AuditLogGetPayload<{
+  include: typeof auditLogInclude;
+}>;
 
 export async function getAuditLogs(
   filterInput?: Partial<AuditLogFilterInput>
-): Promise<ActionResponse<AuditLogItem[]>> {
+): Promise<ActionResponse<AuditLogWithRelations[]>> {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || !session.user.id) {
+    if (!session?.user?.id) {
       return {
         success: false,
         message: 'Anda harus login terlebih dahulu.',
@@ -25,16 +58,16 @@ export async function getAuditLogs(
     }
 
     const validated = auditLogFilterSchema.safeParse(filterInput || {});
-    const filter = validated.success ? validated.data : { limit: 50 };
+    const filter = validated.success ? validated.data : { page: 1, limit: 50 };
+    const page = filter.page || 1;
+    const limit = filter.limit || 50;
 
-    const whereClause: any = {};
+    const whereClause: Prisma.AuditLogWhereInput = {};
 
     if (filter.month !== undefined && filter.year !== undefined) {
-      const startDate = new Date(filter.year, filter.month - 1, 1, 0, 0, 0, 0);
-      const endDate = new Date(filter.year, filter.month, 0, 23, 59, 59, 999);
       whereClause.createdAt = {
-        gte: startDate,
-        lte: endDate,
+        gte: new Date(filter.year, filter.month - 1, 1, 0, 0, 0, 0),
+        lte: new Date(filter.year, filter.month, 0, 23, 59, 59, 999),
       };
     }
 
@@ -46,55 +79,41 @@ export async function getAuditLogs(
       whereClause.actorId = filter.actorId;
     }
 
-    if (filter.applicationQuery && filter.applicationQuery.trim()) {
+    if (filter.applicationQuery?.trim()) {
       const q = filter.applicationQuery.trim();
-      const matchedApps = await prisma.application.findMany({
-        where: {
+      whereClause.application = {
+        is: {
           OR: [
             { applicationId: { contains: q, mode: 'insensitive' } },
             { requestedNop: { contains: q, mode: 'insensitive' } },
           ],
         },
-        select: { id: true },
-        take: 100,
-      });
-
-      const matchedIds = matchedApps.map((a) => a.id);
-      whereClause.applicationId = { in: matchedIds };
+      };
     }
 
-    const logs = await prisma.auditLog.findMany({
-      where: whereClause,
-      include: {
-        application: {
-          select: {
-            id: true,
-            applicationId: true,
-            applicationType: true,
-            status: true,
-            requestedNop: true,
-            taxSubject: true,
-            taxObject: true,
-          },
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where: whereClause }),
+      prisma.auditLog.findMany({
+        where: whereClause,
+        include: auditLogInclude,
+        orderBy: {
+          createdAt: 'desc',
         },
-        actor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: filter.limit || 50,
-    });
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
     return {
       success: true,
-      data: logs as unknown as AuditLogItem[],
+      data: logs,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
     };
   } catch (error) {
     console.error('Error fetching audit logs:', error);
@@ -109,42 +128,29 @@ export async function getAuditLogs(
 export async function getAuditLogFilterOptions() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return { success: false, users: [], applications: [] };
+    if (!session?.user) {
+      return { success: false, users: [] };
     }
 
-    const [users, applications] = await Promise.all([
-      prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          role: true,
-          email: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.application.findMany({
-        select: {
-          id: true,
-          applicationId: true,
-          taxSubject: true,
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: 100,
-      }),
-    ]);
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        email: true,
+      },
+      orderBy: { name: 'asc' },
+    });
 
     return {
       success: true,
       users,
-      applications: applications.map((a) => ({
-        id: a.id,
-        applicationId: a.applicationId,
-        applicantName: a.taxSubject?.name || `Permohonan #${a.applicationId}`,
-      })),
     };
   } catch (error) {
     console.error('Error fetching filter options:', error);
-    return { success: false, users: [], applications: [] };
+    return { success: false, users: [] };
   }
 }

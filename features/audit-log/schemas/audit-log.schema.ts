@@ -118,6 +118,7 @@ export const auditLogFilterSchema = z.object({
   action: z.string().optional(),
   actorId: z.string().optional(),
   applicationQuery: z.string().optional(),
+  page: z.number().min(1).default(1),
   limit: z.number().min(1).max(100).default(50),
 });
 
