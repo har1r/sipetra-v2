@@ -7,6 +7,8 @@ import { KuptBundleTable } from '@/features/head-of-office/components';
 import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
 import { hasStageAccess } from '@/lib/rbac';
 
+import { ApplicationStatus } from '@prisma/client';
+
 export const metadata = {
   title: 'TTD KUPT (Kepala UPT) — SIPETRA Architax',
   description: 'Tinjau kelayakan dan tanda tangani berkas bundle telaah permohonan pajak daerah.',
@@ -24,6 +26,13 @@ export default async function WorkflowTtdKUPTPage() {
   }
 
   const bundles = await prisma.bundle.findMany({
+    where: {
+      applications: {
+        some: {
+          status: ApplicationStatus.OFFICE_HEAD_APPROVING,
+        },
+      },
+    },
     orderBy: {
       updatedAt: 'desc',
     },

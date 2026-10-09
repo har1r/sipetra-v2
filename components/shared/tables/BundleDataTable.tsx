@@ -163,7 +163,7 @@ const BundleCardItem = memo(function BundleCardItem({
           </div>
         </div>
 
-        <div className="relative">
+        <div className="relative" data-bundle-menu="true">
           <button
             type="button"
             onClick={() => onToggleMenu(bundle.id)}
@@ -173,17 +173,11 @@ const BundleCardItem = memo(function BundleCardItem({
           </button>
 
           {isMenuOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={onCloseMenu}
-              />
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                {renderActions
-                  ? renderActions(bundle, onCloseMenu)
-                  : <DefaultBundleActions bundle={bundle} closeMenu={onCloseMenu} />}
-              </div>
-            </>
+            <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+              {renderActions
+                ? renderActions(bundle, onCloseMenu)
+                : <DefaultBundleActions bundle={bundle} closeMenu={onCloseMenu} />}
+            </div>
           )}
         </div>
       </div>
@@ -311,7 +305,7 @@ const BundleTableRowItem = memo(function BundleTableRowItem({
             () => onToggleMenu(bundle.id)
           )
         ) : (
-          <div className="relative inline-block text-left">
+          <div className="relative inline-block text-left" data-bundle-menu="true">
             <button
               type="button"
               onClick={() => onToggleMenu(bundle.id)}
@@ -321,17 +315,11 @@ const BundleTableRowItem = memo(function BundleTableRowItem({
             </button>
 
             {isMenuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={onCloseMenu}
-                />
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left">
-                  {renderActions
-                    ? renderActions(bundle, onCloseMenu)
-                    : <DefaultBundleActions bundle={bundle} closeMenu={onCloseMenu} />}
-                </div>
-              </>
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left">
+                {renderActions
+                  ? renderActions(bundle, onCloseMenu)
+                  : <DefaultBundleActions bundle={bundle} closeMenu={onCloseMenu} />}
+              </div>
             )}
           </div>
         )}
@@ -354,6 +342,18 @@ export function BundleDataTable({
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-bundle-menu]')) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [openMenuId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -9,6 +9,8 @@ import { ApplicationDataTable } from '@/components/shared/tables/ApplicationData
 import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
 import { hasStageAccess } from '@/lib/rbac';
 
+import { ApplicationStatus } from '@prisma/client';
+
 export const metadata = {
   title: 'Pengajuan Permohonan (Submission) — SIPETRA Architax',
   description: 'Daftar permohonan yang diajukan dan draf pengajuan baru.',
@@ -25,8 +27,15 @@ export default async function WorkflowSubmissionPage() {
     return <UnauthorizedView stage="submission" userRole={session.user.role} />;
   }
 
-
   const applications = await prisma.application.findMany({
+    where: {
+      status: {
+        in: [
+          ApplicationStatus.VERIFYING,
+          ApplicationStatus.EXTERNAL_REVISION,
+        ],
+      },
+    },
     orderBy: {
       updatedAt: 'desc',
     },

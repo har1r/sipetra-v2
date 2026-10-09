@@ -9,6 +9,8 @@ import { ApplicationDataTable } from '@/components/shared/tables/ApplicationData
 import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
 import { hasStageAccess } from '@/lib/rbac';
 
+import { ApplicationStatus } from '@prisma/client';
+
 export const metadata = {
   title: 'Verifikasi Permohonan — SIPETRA Architax',
   description: 'Verifikasi kelengkapan berkas permohonan pajak daerah dan kelola bundle telaah.',
@@ -26,6 +28,14 @@ export default async function WorkflowVerifikasiPage() {
   }
 
   const applications = await prisma.application.findMany({
+    where: {
+      status: {
+        in: [
+          ApplicationStatus.VERIFYING,
+          ApplicationStatus.INTERNAL_REVISION,
+        ],
+      },
+    },
     orderBy: {
       updatedAt: 'desc',
     },

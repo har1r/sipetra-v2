@@ -32,3 +32,10 @@ export const kuptBundleFilterSchema = z.object({
 });
 
 export type KuptBundleFilterInput = z.infer<typeof kuptBundleFilterSchema>;
+
+export const signBundleSchema = z.object({
+  bundleId: z.string().min(1, 'ID Bundle wajib diisi'),
+});
+
+export type SignBundleInput = z.infer<typeof signBundleSchema>;
+

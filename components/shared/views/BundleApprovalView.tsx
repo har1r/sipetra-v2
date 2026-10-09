@@ -1,23 +1,25 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
+  FileWarning,
   Paperclip,
   CheckCircle2,
   ExternalLink,
   Download,
   Search,
-  Layers,
   ShieldCheck,
   Loader2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import { APPLICATION_TYPE_UI, ApplicationTypeEnum, getApplicationStatusInfo } from '@/features/front-officer/schemas/application.schema';
-import { approveBundleByKtu } from '@/features/head-of-administrative-office/actions/bundle.actions';
-import { signBundleByKupt } from '@/features/head-of-office/actions/bundle.actions';
+import { approveByheadOfAdministrativeOfficer } from '@/features/head-of-administrative-office/actions/bundle.actions';
+import { signByHeadOfOffice } from '@/features/head-of-office/actions/bundle.actions';
 
 export interface BundleApprovalApplicationItem {
   id: string;
@@ -94,6 +96,17 @@ export function BundleApprovalView({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isApproved, setIsApproved] = useState<boolean>(isInitiallyApproved);
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [fileStatus, setFileStatus] = useState<'checking' | 'valid' | 'invalid' | 'none'>('checking');
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => {
+      setFeedback(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   const selectedApp =
     bundle.applications.find((app) => app.id === selectedAppId) ||
@@ -110,14 +123,6 @@ export function BundleApprovalView({
     });
   }, [bundle.applications, searchQuery]);
 
-  const typeInfo = bundle.applicationType
-    ? APPLICATION_TYPE_UI[bundle.applicationType as ApplicationTypeEnum] || {
-      code: bundle.applicationType,
-      title: bundle.applicationType,
-      badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
-    }
-    : null;
-
   // Filter out client-only temporary blob: URLs which cannot be read across sessions
   const validFiles = React.useMemo(() => {
     return (selectedApp?.files || []).filter(
@@ -127,37 +132,109 @@ export function BundleApprovalView({
 
   const currentFileUrl = validFiles[activeFileIndex] || null;
 
+  // Verifikasi ketersediaan berkas lampiran sebelum merender iframe untuk mencegah kemunculan halaman 404
+  useEffect(() => {
+    if (!currentFileUrl) {
+      setFileStatus('none');
+      return;
+    }
+
+    if (currentFileUrl.startsWith('data:') || currentFileUrl.startsWith('blob:')) {
+      setFileStatus('valid');
+      return;
+    }
+
+    let isCancelled = false;
+    setFileStatus('checking');
+
+    fetch(currentFileUrl, { method: 'HEAD' })
+      .then((res) => {
+        if (!isCancelled) {
+          if (res.ok) {
+            setFileStatus('valid');
+          } else {
+            setFileStatus('invalid');
+          }
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setFileStatus('invalid');
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentFileUrl]);
+
   const handleSelectApp = (appId: string) => {
     setSelectedAppId(appId);
     setActiveFileIndex(0);
   };
 
-  const handleApprovalAction = () => {
+  const handleConfirmApproval = () => {
     if (isApproved || isPending) return;
-    if (!window.confirm(resolvedConfirmMsg)) return;
+    setShowConfirmModal(false);
 
     startTransition(async () => {
       try {
         const res = isKupt
-          ? await signBundleByKupt(bundle.id)
-          : await approveBundleByKtu(bundle.id);
+          ? await signByHeadOfOffice(bundle.id)
+          : await approveByheadOfAdministrativeOfficer(bundle.id);
 
         if (res.success) {
           setIsApproved(true);
-          alert(res.message || resolvedSuccessMsg);
+          setFeedback({
+            type: 'success',
+            message: res.message || resolvedSuccessMsg,
+          });
           router.refresh();
         } else {
-          alert(res.message || 'Gagal memproses berkas bundle.');
+          setFeedback({
+            type: 'error',
+            message: res.message || 'Gagal memproses berkas bundle.',
+          });
         }
       } catch (err) {
         console.error('Approval action error:', err);
-        alert('Terjadi kesalahan saat memproses persetujuan berkas.');
+        setFeedback({
+          type: 'error',
+          message: 'Terjadi kesalahan sistem saat memproses persetujuan berkas.',
+        });
       }
     });
   };
 
   return (
     <div className="space-y-4 pb-12">
+      {/* FEEDBACK TOAST / ALERT */}
+      {feedback && (
+        <div
+          className={`p-3.5 rounded-sm border flex items-center justify-between gap-3 text-xs font-semibold shadow-xs animate-in fade-in slide-in-from-top-2 duration-150 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{feedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="p-1 hover:bg-black/5 rounded-xs transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* HEADER BAR */}
       <div className="bg-white p-4 rounded-sm border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -187,7 +264,7 @@ export function BundleApprovalView({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleApprovalAction}
+            onClick={() => setShowConfirmModal(true)}
             disabled={isApproved || isPending}
             className={`inline-flex items-center gap-2 px-4 py-2 font-semibold text-xs rounded-sm shadow-xs transition-all cursor-pointer ${
               isApproved
@@ -305,7 +382,7 @@ export function BundleApprovalView({
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-xs font-bold text-slate-800 truncate">
-                      Lampiran Berkas
+                      Lampiran Berkas ({selectedApp.applicationId})
                     </h3>
                   </div>
                 </div>
@@ -330,7 +407,7 @@ export function BundleApprovalView({
                     </div>
                   )}
 
-                  {currentFileUrl && (
+                  {currentFileUrl && fileStatus === 'valid' && (
                     <div className="flex items-center gap-1">
                       <a
                         href={currentFileUrl}
@@ -355,28 +432,43 @@ export function BundleApprovalView({
                 </div>
               </div>
 
-              {/* AREA PREVIEW DOKUMEN / PDF */}
+              {/* AREA PREVIEW DOKUMEN / PDF DENGAN FALLBACK & VALIDASI STATUS */}
               <div className="flex-1 bg-slate-100 relative overflow-hidden flex flex-col items-center justify-center">
-                {currentFileUrl ? (
-                  currentFileUrl.endsWith('.png') ||
-                    currentFileUrl.endsWith('.jpg') ||
-                    currentFileUrl.endsWith('.jpeg') ||
-                    currentFileUrl.startsWith('data:image/') ? (
-                    <div className="w-full h-full p-4 overflow-auto flex items-center justify-center">
-                      <img
-                        src={currentFileUrl}
-                        alt={`Berkas ${selectedApp.applicationId}`}
-                        className="max-w-full max-h-full object-contain rounded-xs shadow-md border border-slate-200 bg-white"
-                      />
+                {fileStatus === 'checking' && (
+                  <div className="p-8 text-center text-slate-400 space-y-2 m-auto">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#00a389]" />
+                    <p className="text-xs text-slate-500 font-medium">Memeriksa ketersediaan berkas...</p>
+                  </div>
+                )}
+
+                {fileStatus === 'invalid' && (
+                  <div className="p-10 text-center text-slate-400 space-y-3 m-auto max-w-md">
+                    <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600 shadow-2xs">
+                      <FileWarning className="w-6 h-6" />
                     </div>
-                  ) : (
-                    <iframe
-                      src={currentFileUrl}
-                      className="w-full h-full border-0 bg-white"
-                      title={`Preview PDF ${selectedApp.applicationId}`}
-                    />
-                  )
-                ) : (
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800">Berkas Lampiran Tidak Ditemukan</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Tautan berkas digital permohonan <span className="font-semibold text-slate-700 font-mono">{selectedApp.applicationId}</span> tidak ditemukan pada server penyimpanan (404 Not Found).
+                      </p>
+                    </div>
+                    {currentFileUrl && (
+                      <div className="pt-2">
+                        <a
+                          href={currentFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-sm transition-colors shadow-2xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Coba Buka Tautan Berkas</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {fileStatus === 'none' && (
                   <div className="p-12 text-center text-slate-400 space-y-3 m-auto">
                     <div className="w-12 h-12 rounded-full bg-slate-200/70 flex items-center justify-center mx-auto text-slate-400">
                       <FileText className="w-6 h-6" />
@@ -389,7 +481,37 @@ export function BundleApprovalView({
                     </div>
                   </div>
                 )}
+
+                {fileStatus === 'valid' && currentFileUrl && (
+                  currentFileUrl.endsWith('.png') ||
+                  currentFileUrl.endsWith('.jpg') ||
+                  currentFileUrl.endsWith('.jpeg') ||
+                  currentFileUrl.startsWith('data:image/') ? (
+                    <div className="w-full h-full p-4 overflow-auto flex items-center justify-center">
+                      <img
+                        src={currentFileUrl}
+                        alt={`Berkas ${selectedApp.applicationId}`}
+                        loading="lazy"
+                        onError={() => setFileStatus('invalid')}
+                        className="max-w-full max-h-full object-contain rounded-xs shadow-md border border-slate-200 bg-white"
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      src={currentFileUrl}
+                      loading="lazy"
+                      className="w-full h-full border-0 bg-white"
+                      title={`Preview PDF ${selectedApp.applicationId}`}
+                    />
+                  )
+                )}
               </div>
+
+              {fileStatus === 'valid' && currentFileUrl && (
+                <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 text-center text-[11px] text-slate-500">
+                  Pratinjau berkas digital. Jika tidak tampil sempurna di peramban, gunakan tombol <span className="font-semibold text-slate-700">Buka</span> di atas.
+                </div>
+              )}
             </>
           ) : (
             <div className="p-12 text-center text-slate-400 space-y-2 m-auto">
@@ -399,6 +521,47 @@ export function BundleApprovalView({
           )}
         </div>
       </div>
+
+      {/* NON-BLOCKING CONFIRMATION MODAL */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[100] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-sm shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 text-[#00a389]">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {isKupt ? 'Konfirmasi Tanda Tangan Bundle' : 'Konfirmasi Paraf Persetujuan Bundle'}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {resolvedConfirmMsg}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isPending}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-sm transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmApproval}
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#00a389] hover:bg-[#008670] text-white text-xs font-semibold rounded-sm shadow-xs transition-colors cursor-pointer"
+              >
+                {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isPending ? 'Memproses...' : 'Ya, Lanjutkan'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

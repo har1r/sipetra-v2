@@ -32,3 +32,10 @@ export const ktuBundleFilterSchema = z.object({
 });
 
 export type KtuBundleFilterInput = z.infer<typeof ktuBundleFilterSchema>;
+
+export const approveBundleSchema = z.object({
+  bundleId: z.string().min(1, 'ID Bundle wajib diisi'),
+});
+
+export type ApproveBundleInput = z.infer<typeof approveBundleSchema>;
+

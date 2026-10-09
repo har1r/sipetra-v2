@@ -7,6 +7,8 @@ import { KtuBundleTable } from '@/features/head-of-administrative-office/compone
 import { UnauthorizedView } from '@/components/shared/states/UnauthorizedView';
 import { hasStageAccess } from '@/lib/rbac';
 
+import { ApplicationStatus } from '@prisma/client';
+
 export const metadata = {
   title: 'Paraf KTU (Kepala Tata Usaha) — SIPETRA Architax',
   description: 'Tinjau dan paraf berkas bundle telaah permohonan pajak daerah.',
@@ -24,6 +26,13 @@ export default async function WorkflowParafKTUPage() {
   }
 
   const bundles = await prisma.bundle.findMany({
+    where: {
+      applications: {
+        some: {
+          status: ApplicationStatus.ADMINISTRATIVE_OFFICE_HEAD_APPROVING,
+        },
+      },
+    },
     orderBy: {
       updatedAt: 'desc',
     },
